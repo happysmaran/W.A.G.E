@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import uuid
+
+from app.services.ollama_client import ollama_client
+from app.services.vector_store import vector_index
+
+SCORING_SYSTEM_PROMPT = """You are a precise job-fit analyst. Given a candidate's resume \
+chunks and a job description, identify concrete matches and concrete gaps.
+
+Rules:
+- Every match and gap must reference something specific and checkable (a named \
+tool, years of experience, a domain, a certification) — never vague statements \
+like "seems like a good fit".
+- Mark a gap as "blocker" ONLY if the job description explicitly uses hard-requirement \
+language ("required", "must have", "X+ years required") AND the resume shows no \
+reasonably related experience at all. Default to "minor" whenever there's ambiguity —
+a candidate with adjacent or partial experience is a minor gap, not a blocker.
+- Seniority/experience-level mismatches for internships or entry-level roles are \
+almost always "minor", not "blocker" — junior roles exist specifically for people \
+who don't yet have years of experience.
+- Respond only with JSON matching this exact shape, nothing else:
+{"matches": [{"label": "string"}], "gaps": [{"label": "string", "severity": "blocker|minor"}]}
+"""
+
+# Real embedding cosine similarities for related professional text cluster in a
+# much narrower band than [0, 1] — two genuinely relevant chunks might sit
+# around 0.4-0.6, not 0.9+. Mapping raw similarity directly to a 0-100 score
+# makes strong matches look mediocre. These anchors stretch the realistic
+# working range out to something that reads sensibly as a percentage. They're
+# a rough calibration based on nomic-embed-text's typical behavior, not a
+# precise measurement — worth re-tuning against real scored examples over time.
+SIMILARITY_FLOOR = 0.15
+SIMILARITY_CEILING = 0.65
+
+# Flat per-blocker penalty, capped so a couple of (possibly mis-classified)
+# blockers from a weaker model can't single-handedly crater an otherwise
+# strong topical match to near-zero.
+BLOCKER_PENALTY = 10
+MAX_BLOCKER_PENALTY = 25
+
+
+def _rescale_similarity(raw: float) -> float:
+    stretched = (raw - SIMILARITY_FLOOR) / (SIMILARITY_CEILING - SIMILARITY_FLOOR)
+    return max(0.0, min(1.0, stretched))
+
+
+def _mock_gap_analysis(job_description: str) -> dict:
+    return {
+        "matches": [
+            {"label": "Resume shows direct experience with the core language/framework mentioned"},
+            {"label": "Prior role scope matches the seniority level of this posting"},
+        ],
+        "gaps": [
+            {"label": "Job description names a required tool not found in the resume", "severity": "blocker"},
+        ],
+    }
+
+
+async def score_job(persona_id: str, job_title: str, company: str, job_description: str) -> dict:
+    """
+    Produces a 0-100 fit score plus an explainable breakdown of matches and gaps.
+
+    The numeric score is derived from resume/JD vector similarity (a rough
+    triage signal, not gospel) while the match/gap list comes from the LLM
+    reasoning over the same inputs. Both are returned together so the UI can
+    show *why* a score is what it is, rather than just the number.
+
+    Worth knowing: gap/blocker classification quality depends heavily on the
+    chat model in use. Small edge models (1-2B parameters) are meaningfully
+    less reliable at this kind of nuanced judgment call than larger ones —
+    they tend to over-flag things as "blocker" that a stronger model would
+    correctly call "minor". The prompt above pushes toward conservative
+    classification, but a bigger model will still be noticeably better at this.
+    """
+    raw_similarity = await vector_index.overall_similarity(persona_id, job_description)
+    baseline_score = round(_rescale_similarity(raw_similarity) * 100)
+
+    analysis = await ollama_client.chat_json(
+        system=SCORING_SYSTEM_PROMPT,
+        user=f"Job title: {job_title}\nCompany: {company}\nJob description:\n{job_description}",
+        mock_response=_mock_gap_analysis(job_description),
+    )
+
+    blocker_count = sum(1 for g in analysis.get("gaps", []) if g.get("severity") == "blocker")
+    penalty = min(blocker_count * BLOCKER_PENALTY, MAX_BLOCKER_PENALTY)
+    adjusted_score = max(0, baseline_score - penalty)
+
+    matches = [{"id": str(uuid.uuid4())[:8], "label": m["label"]} for m in analysis.get("matches", [])]
+    gaps = [
+        {"id": str(uuid.uuid4())[:8], "label": g["label"], "severity": g["severity"]}
+        for g in analysis.get("gaps", [])
+    ]
+
+    if adjusted_score >= 80:
+        tag = "High skill overlap"
+    elif adjusted_score >= 65:
+        tag = "Missing 1 core tool" if blocker_count else "Strong overlap, minor gaps"
+    else:
+        tag = "Significant gaps"
+
+    return {
+        "score": adjusted_score,
+        "tag": tag,
+        "matches": matches,
+        "gaps": gaps,
+    }

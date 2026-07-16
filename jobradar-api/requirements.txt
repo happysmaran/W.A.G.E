@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+httpx
+pypdf
+python-multipart
+numpy
+sqlmodel
