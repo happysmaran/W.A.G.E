@@ -6,6 +6,7 @@ import { RadarFeed } from "@/components/RadarFeed";
 import { BattleRoom } from "@/components/BattleRoom";
 import { UploadPersonaModal } from "@/components/UploadPersonaModal";
 import { AddJobModal } from "@/components/AddJobModal";
+import { TopBar } from "@/components/TopBar";
 import { api } from "@/lib/api";
 import { Job, OllamaStatus, Persona, WorkMode } from "@/lib/types";
 
@@ -155,7 +156,9 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p className="text-sm font-mono text-ink-muted">connecting to api...</p>
+        <p className="text-sm font-mono text-ink-muted uppercase tracking-wideish">
+          connecting to api<span className="animate-pulse">_</span>
+        </p>
       </main>
     );
   }
@@ -164,7 +167,10 @@ export default function DashboardPage() {
     return (
       <main className="min-h-screen flex items-center justify-center px-6">
         <div className="max-w-md text-center">
-          <p className="text-sm text-signal-stop mb-2">{error}</p>
+          <p className="text-[11px] font-mono text-signal-stop uppercase tracking-wideish mb-2">
+            connection failed
+          </p>
+          <p className="text-sm text-ink-secondary mb-3">{error}</p>
           <p className="text-xs font-mono text-ink-muted">
             Make sure the backend is running (uvicorn app.main:app --port 8000) and
             NEXT_PUBLIC_API_BASE_URL matches its address.
@@ -175,7 +181,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col lg:flex-row">
+    <main className="min-h-screen flex flex-col">
+      <TopBar jobs={jobs} ollamaStatus={ollamaStatus} />
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
       <PersonaVault
         personas={personas}
         activePersonaId={activePersonaId}
@@ -223,6 +231,7 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      </div>
 
       {showUploadPersona && (
         <UploadPersonaModal onClose={() => setShowUploadPersona(false)} onCreated={handlePersonaCreated} />

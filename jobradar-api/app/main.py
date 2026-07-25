@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -9,9 +10,12 @@ from sqlmodel import Session, select
 
 from app.config import settings
 from app.db import create_db_and_tables, engine
+from app.logging_config import logger, setup_logging
 from app.models.db_models import ResumeChunkDB
 from app.routers import jobs, ollama, personas
 from app.services.vector_store import vector_index
+
+setup_logging()
 
 
 def _migrate_add_missing_columns() -> None:
@@ -28,6 +32,7 @@ def _migrate_add_missing_columns() -> None:
         if existing_columns and "persona_id" not in existing_columns:
             conn.exec_driver_sql("ALTER TABLE jobs ADD COLUMN persona_id TEXT DEFAULT ''")
             conn.commit()
+            logger.info("migrated: added jobs.persona_id column")
 
 
 @asynccontextmanager
@@ -52,18 +57,27 @@ async def lifespan(app: FastAPI):
                 # API down at startup. Log it and continue — /jobs/score for
                 # this persona will fail with a clear error until the model
                 # is pulled and reachable, but everything else keeps working.
-                print(
-                    f"[startup] Failed to index resume for persona '{persona_id}': {exc}\n"
-                    f"  This usually means the configured Ollama model isn't pulled yet, "
-                    f"or Ollama isn't running/reachable at the configured base URL.\n"
-                    f"  Run `ollama pull <model>` and `ollama list` to check, or set "
-                    f"JOBRADAR_MOCK_LLM=true to run without a live Ollama instance."
+                logger.warning(
+                    "Failed to index resume for persona '%s': %s\n"
+                    "  This usually means the configured Ollama model isn't pulled yet, "
+                    "or Ollama isn't running/reachable at the configured base URL.\n"
+                    "  Run `ollama pull <model>` and `ollama list` to check, or set "
+                    "JOBRADAR_MOCK_LLM=true to run without a live Ollama instance.",
+                    persona_id,
+                    exc,
                 )
 
+    logger.info("startup complete — mock_llm=%s ollama_base_url=%s", settings.mock_llm, settings.ollama_base_url)
     yield
+    logger.info("shutting down")
 
 
-app = FastAPI(title="JobRadar API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(
+    title="JobRadar API",
+    description="Ingestion, scoring, tailoring, and outreach pipeline for job search strategy.",
+    version="0.3.0",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -72,6 +86,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    logger.info("%s %s -> %d (%.0fms)", request.method, request.url.path, response.status_code, duration_ms)
+    return response
+
 
 app.include_router(personas.router)
 app.include_router(jobs.router)
@@ -86,7 +110,18 @@ async def ollama_runtime_error_handler(request: Request, exc: RuntimeError):
     # it here once so every endpoint that eventually calls into Ollama gets a
     # clean, readable 502 with the actual diagnostic message instead of a
     # bare unhandled-exception 500.
+    logger.error("Ollama error on %s: %s", request.url.path, exc)
     return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+@app.get("/")
+async def root():
+    return {
+        "service": "jobradar-api",
+        "version": app.version,
+        "mock_llm": settings.mock_llm,
+        "docs": "/docs",
+    }
 
 
 @app.get("/health")

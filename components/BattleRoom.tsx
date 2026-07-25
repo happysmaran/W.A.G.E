@@ -93,7 +93,9 @@ export function BattleRoom({ job, onClose, onDeleted, onStatusChanged }: BattleR
     <aside className="w-full lg:w-[420px] shrink-0 border-t lg:border-t-0 lg:border-l border-base-line bg-base-panel flex flex-col">
       <div className="flex items-start justify-between px-5 py-4 border-b border-base-line">
         <div>
-          <p className="text-sm text-ink-primary tracking-tightish">{job.title}</p>
+          <p className="text-sm text-ink-primary tracking-tightish">
+            {job.title} <span className="text-ink-muted font-mono text-[10px]">#{job.id}</span>
+          </p>
           <p className="text-xs text-ink-secondary mt-0.5">
             {job.company} <span className="text-ink-muted mx-1">/</span> match {job.score}
           </p>

@@ -57,8 +57,14 @@ canned data — useful for frontend development without any external dependency.
 - `app/services/tailoring.py` — bullet rewriting and outreach draft generation.
 - `app/db.py` / `app/models/db_models.py` — SQLite persistence via SQLModel.
   Auto-creates `jobradar.db` on first run; survives restarts.
+- `app/logging_config.py` — structured logging (timestamps, level, logger
+  name) instead of scattered `print()` calls. A request-timing middleware in
+  `main.py` logs method/path/status/duration for every request.
 - `app/routers/` — HTTP layer, one router per resource. `POST /jobs` is the
   only job-ingestion path — see "No automated scraping" below.
+
+Copy `.env.example` to `.env` (or just set the env vars directly) to
+configure without editing code.
 
 No fixture/dummy data is seeded — the app starts genuinely empty. Create a
 persona (upload a resume) and add jobs through the UI or API before there's
