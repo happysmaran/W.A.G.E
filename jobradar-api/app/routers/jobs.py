@@ -47,16 +47,7 @@ def _to_schema(row: JobDB) -> Job:
 
 @router.post("", response_model=Job)
 async def create_job(payload: JobCreate, session: Session = Depends(get_session)):
-    """
-    Takes a raw pasted job posting (title/company optional — filled in
-    automatically if left blank), cleans it up, scores it against the given
-    persona, and persists it. This is the only ingestion path: automated
-    board scraping was tried and pulled after proving too fragile in
-    practice (ATS APIs returning inconsistent/empty results, JS-rendered
-    career pages needing a full headless browser, plus the legal grey area
-    of scraping in general). A good paste-and-clean flow is more reliable
-    than a scraper that silently returns nothing.
-    """
+    """Cleans a raw pasted job posting, scores it against the persona, and persists it."""
     persona = session.get(PersonaDB, payload.persona_id)
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -154,10 +145,7 @@ async def update_job_status(job_id: str, update: JobStatusUpdate, session: Sessi
 
 @router.post("/score")
 async def score(request: ScoreRequest, session: Session = Depends(get_session)):
-    """
-    Runs the Cross-Reference & Score step: baseline vector similarity plus
-    LLM-generated match/gap breakdown, returned together for the explainability panel.
-    """
+    """Baseline vector similarity plus LLM-generated match/gap breakdown for the explainability panel."""
     persona = session.get(PersonaDB, request.persona_id)
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -177,10 +165,8 @@ async def tailor(request: TailorRequest, session: Session = Depends(get_session)
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # bullet_before was never populated at job-creation time (there's no
-    # single "the" resume bullet until we know which job we're tailoring
-    # for) — pull the most relevant resume chunk against this specific job
-    # now, on demand, the first time tailoring is requested.
+    # No bullet to tailor until we know which job — pull the closest
+    # matching resume chunk on first request rather than at job creation.
     if not row.bullet_before:
         matches = await vector_index.best_matches(request.persona_id, row.job_description, top_k=1)
         if not matches:

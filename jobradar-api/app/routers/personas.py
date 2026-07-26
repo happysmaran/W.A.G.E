@@ -67,11 +67,7 @@ async def create_persona(
     resume: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
-    """
-    Ingestion endpoint: accepts a resume file plus guardrail settings, extracts
-    text, splits it into semantic chunks, persists both the persona and its
-    chunks, and indexes the chunks into the (in-process) vector store.
-    """
+    """Extracts and chunks the resume, persists the persona, and indexes it into the vector store."""
     persona_id = str(uuid.uuid4())[:8]
     raw_bytes = await resume.read()
     raw_text = extract_text(raw_bytes, resume.filename or "")

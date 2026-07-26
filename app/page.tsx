@@ -7,6 +7,7 @@ import { BattleRoom } from "@/components/BattleRoom";
 import { UploadPersonaModal } from "@/components/UploadPersonaModal";
 import { AddJobModal } from "@/components/AddJobModal";
 import { TopBar } from "@/components/TopBar";
+import { SettingsModal } from "@/components/SettingsModal";
 import { api } from "@/lib/api";
 import { Job, OllamaStatus, Persona, WorkMode } from "@/lib/types";
 
@@ -26,6 +27,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [showUploadPersona, setShowUploadPersona] = useState(false);
   const [showAddJob, setShowAddJob] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,7 +184,7 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen flex flex-col">
-      <TopBar jobs={jobs} ollamaStatus={ollamaStatus} />
+      <TopBar jobs={jobs} ollamaStatus={ollamaStatus} onOpenSettings={() => setShowSettings(true)} />
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
       <PersonaVault
         personas={personas}
@@ -241,6 +243,18 @@ export default function DashboardPage() {
           personaId={activePersonaId}
           onClose={() => setShowAddJob(false)}
           onCreated={handleJobCreated}
+        />
+      )}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          onSaved={async () => {
+            try {
+              setOllamaStatus(await api.getOllamaStatus());
+            } catch {
+              // leave whatever status was already showing
+            }
+          }}
         />
       )}
     </main>

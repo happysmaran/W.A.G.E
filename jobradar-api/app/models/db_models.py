@@ -42,3 +42,10 @@ class JobDB(SQLModel, table=True):
     outreach_draft: str
     applied_at: str | None = Field(default=None)
     job_description: str = Field(default="")
+
+
+class SettingsDB(SQLModel, table=True):
+    __tablename__ = "settings"
+
+    key: str = Field(primary_key=True)
+    value: str

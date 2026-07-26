@@ -6,46 +6,30 @@ import struct
 
 import httpx
 
-from app.config import settings
-from app.services.ollama_runtime import ollama_runtime
+from app.services.runtime_config import runtime_config
 
 EMBEDDING_DIM = 256
+MAX_USER_CHARS = 6000
 
 
 class OllamaClient:
-    """
-    Thin wrapper around Ollama's /api/chat and /api/embeddings endpoints.
+    """Wrapper around Ollama's /api/chat and /api/embeddings endpoints.
 
-    Reads connection details from ollama_runtime rather than capturing them
-    once at construction time, so switching modes via PATCH /ollama/status
-    takes effect on the very next call with no restart needed.
+    Reads connection details from runtime_config on every call, so changes
+    made via the settings API take effect immediately with no restart.
     """
-
-    def __init__(self) -> None:
-        self.mock = settings.mock_llm
 
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
-        if settings.ollama_api_key:
-            headers["Authorization"] = f"Bearer {settings.ollama_api_key}"
+        if runtime_config.state.api_key:
+            headers["Authorization"] = f"Bearer {runtime_config.state.api_key}"
         return headers
 
     async def chat_json(self, system: str, user: str, mock_response: dict) -> dict:
-        """
-        Sends a chat completion request constrained to JSON output.
-        Falls back to a caller-supplied canned response when mock_llm is set,
-        so routes remain testable without a live Ollama instance.
-        """
-        if self.mock:
+        if runtime_config.state.mock_llm:
             return mock_response
 
-        state = ollama_runtime.state
-        # Defensive cap: a long pasted job posting (plus system prompt) can
-        # exceed a small model's context window. Ollama's behavior on
-        # overflow varies by model/version — sometimes a clean truncation,
-        # sometimes an internal 500 — so it's safer to truncate ourselves
-        # than trust every model to handle it gracefully.
-        MAX_USER_CHARS = 6000
+        state = runtime_config.state
         if len(user) > MAX_USER_CHARS:
             user = user[:MAX_USER_CHARS] + "\n[...truncated, posting was longer than the model's usable context]"
 
@@ -57,80 +41,55 @@ class OllamaClient:
             ],
             "format": "json",
             "stream": False,
-            "options": {"num_ctx": settings.ollama_num_ctx},
+            "options": {"num_ctx": state.num_ctx},
         }
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
-                response = await client.post(
-                    f"{state.base_url}/api/chat",
-                    headers=self._headers(),
-                    json=payload,
-                )
+                response = await client.post(f"{state.base_url}/api/chat", headers=self._headers(), json=payload)
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
-                # httpx's default error message doesn't include the response
-                # body, which is exactly where Ollama puts the actual reason
-                # for a 500 (OOM, context overflow, model crash, etc). Surface
-                # it instead of a bare "500 Internal Server Error".
                 body = exc.response.text[:500]
-                if "out of memory" in body.lower() or "cudamalloc" in body.lower() or "failed to allocate" in body.lower():
+                if any(s in body.lower() for s in ("out of memory", "cudamalloc", "failed to allocate")):
                     raise RuntimeError(
                         f"Ollama ran out of GPU memory loading '{state.model}': {body}\n"
                         f"This is a GPU/driver-level allocation failure, not something JobRadar's "
                         f"request caused directly. A few things to try:\n"
-                        f"  1. Run `ollama ps` to check whether another model is already loaded and "
-                        f"holding VRAM — `ollama stop <model>` to free it, or set OLLAMA_MAX_LOADED_MODELS=1 "
-                        f"before starting `ollama serve` so it doesn't try to keep multiple models resident.\n"
-                        f"  2. Try `OLLAMA_FLASH_ATTENTION=true ollama serve` — flash attention meaningfully "
-                        f"shrinks KV cache memory usage per token, and your config shows it's currently off.\n"
-                        f"  3. Switch to a smaller chat model (JOBRADAR_OLLAMA_MODEL) if this GPU/driver combo "
-                        f"can't comfortably fit this one alongside the embedding model."
+                        f"  1. `ollama ps` to check whether another model is already loaded and holding "
+                        f"VRAM — `ollama stop <model>` to free it, or set OLLAMA_MAX_LOADED_MODELS=1.\n"
+                        f"  2. Try `OLLAMA_FLASH_ATTENTION=true ollama serve` — this meaningfully shrinks "
+                        f"KV cache memory per token.\n"
+                        f"  3. Switch to a smaller chat model if this GPU/driver combo can't fit this one."
                     ) from exc
                 raise RuntimeError(
-                    f"Ollama returned {exc.response.status_code} for model '{state.model}': {body or '(empty response body)'}\n"
-                    f"Check the terminal running `ollama serve` for the underlying error — Ollama's own "
-                    f"logs will usually show the real cause (out of memory, context length exceeded, etc). "
-                    f"Also try the exact request directly: curl {state.base_url}/api/chat -d "
-                    f'\'{{"model":"{state.model}","messages":[{{"role":"user","content":"hi"}}],"stream":false}}\''
+                    f"Ollama returned {exc.response.status_code} for model '{state.model}': "
+                    f"{body or '(empty response body)'}\n"
+                    f"Check the terminal running `ollama serve` for the underlying error."
                 ) from exc
             except httpx.ConnectError as exc:
                 raise RuntimeError(
-                    f"Couldn't connect to Ollama at {state.base_url}. Is `ollama serve` actually "
-                    f"running? Test it directly with: curl {state.base_url}/api/tags"
+                    f"Couldn't connect to Ollama at {state.base_url}. Is `ollama serve` running? "
+                    f"Test directly with: curl {state.base_url}/api/tags"
                 ) from exc
             except httpx.TimeoutException as exc:
                 raise RuntimeError(
-                    f"Ollama at {state.base_url} didn't respond within 60s for model '{state.model}'. "
-                    f"It may be overloaded, or the model may be too slow for this request on this hardware."
+                    f"Ollama at {state.base_url} didn't respond within 60s for model '{state.model}'."
                 ) from exc
 
-            data = response.json()
-            content = data["message"]["content"]
+            content = response.json()["message"]["content"]
             try:
                 return json.loads(content)
             except json.JSONDecodeError:
-                # Small/local models occasionally wrap JSON in prose despite the
-                # format="json" constraint. Fall back to the canned shape rather
-                # than surfacing a 500 to the frontend.
+                # Some models wrap JSON in prose despite format="json". Fall
+                # back to the canned shape rather than surfacing a 500.
                 return mock_response
 
     async def embed(self, text: str) -> list[float]:
-        """
-        Returns a vector embedding for the given text via Ollama's embeddings
-        endpoint. In mock mode, returns a deterministic pseudo-embedding
-        derived from a hash of the text so that identical or similar strings
-        still produce comparable vectors during local dev without a real
-        embedding model available.
-
-        Tries the newer /api/embed endpoint first, falling back to the older
-        /api/embeddings for older Ollama installs, since the shape differs
-        slightly between versions.
-        """
-        if self.mock:
+        """Tries the newer /api/embed endpoint first, falling back to /api/embeddings for older installs."""
+        if runtime_config.state.mock_llm:
             return _mock_embedding(text)
 
-        state = ollama_runtime.state
+        state = runtime_config.state
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 try:
@@ -140,10 +99,9 @@ class OllamaClient:
                         json={"model": state.embedding_model, "input": text},
                     )
                     response.raise_for_status()
-                    data = response.json()
-                    return data["embeddings"][0]
+                    return response.json()["embeddings"][0]
                 except httpx.HTTPStatusError:
-                    pass  # fall through to the older endpoint below
+                    pass  # fall through to the older endpoint
 
                 try:
                     response = await client.post(
@@ -152,33 +110,29 @@ class OllamaClient:
                         json={"model": state.embedding_model, "prompt": text},
                     )
                     response.raise_for_status()
-                    data = response.json()
-                    return data["embedding"]
+                    return response.json()["embedding"]
                 except httpx.HTTPStatusError as exc:
                     raise RuntimeError(
                         f"Ollama returned {exc.response.status_code} for embedding model "
-                        f"'{state.embedding_model}' at {state.base_url}. Chat models (deepseek-r1, "
-                        f"llama3.1, etc.) can't produce embeddings — you need a model built for it. "
-                        f"Run `ollama pull {state.embedding_model}` (or set "
-                        f"JOBRADAR_OLLAMA_EMBEDDING_MODEL to one you already have, e.g. "
-                        f"mxbai-embed-large or all-minilm), then retry."
+                        f"'{state.embedding_model}' at {state.base_url}. Chat models can't produce "
+                        f"embeddings — you need a model built for it, e.g. nomic-embed-text or "
+                        f"mxbai-embed-large. Run `ollama pull {state.embedding_model}` then retry."
                     ) from exc
         except httpx.ConnectError as exc:
             raise RuntimeError(
-                f"Couldn't connect to Ollama at {state.base_url}. Is `ollama serve` actually "
-                f"running? Test it directly with: curl {state.base_url}/api/tags"
+                f"Couldn't connect to Ollama at {state.base_url}. Is `ollama serve` running? "
+                f"Test directly with: curl {state.base_url}/api/tags"
             ) from exc
         except httpx.TimeoutException as exc:
             raise RuntimeError(
                 f"Ollama at {state.base_url} didn't respond within 30s while embedding with "
-                f"'{state.embedding_model}'. It may be overloaded or the model may be too slow "
-                f"on this hardware."
+                f"'{state.embedding_model}'."
             ) from exc
 
     async def health(self) -> bool:
-        if self.mock:
+        if runtime_config.state.mock_llm:
             return True
-        state = ollama_runtime.state
+        state = runtime_config.state
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(f"{state.base_url}/api/tags", headers=self._headers())
@@ -188,23 +142,14 @@ class OllamaClient:
 
 
 def _mock_embedding(text: str) -> list[float]:
-    """
-    Deterministic bag-of-words-ish pseudo-embedding: hashes overlapping
-    word shingles into fixed-size buckets so that texts sharing vocabulary
-    produce vectors with nonzero cosine similarity, without needing a real
-    model. This is a stand-in only — swap for a live embedding call once
-    JOBRADAR_MOCK_LLM=false with a reachable Ollama instance.
-    """
+    """Deterministic hashed pseudo-embedding so mock mode still produces comparable vectors."""
     vector = [0.0] * EMBEDDING_DIM
-    words = text.lower().split()
-    for word in words:
+    for word in text.lower().split():
         digest = hashlib.sha256(word.encode("utf-8")).digest()
         bucket = struct.unpack("I", digest[:4])[0] % EMBEDDING_DIM
         vector[bucket] += 1.0
     norm = sum(v * v for v in vector) ** 0.5
-    if norm > 0:
-        vector = [v / norm for v in vector]
-    return vector
+    return [v / norm for v in vector] if norm > 0 else vector
 
 
 ollama_client = OllamaClient()

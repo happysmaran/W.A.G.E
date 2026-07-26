@@ -1,8 +1,6 @@
 # JobRadar API
 
-FastAPI backend implementing the ingestion → scoring → tailoring → outreach
-pipeline. Runs standalone against mock data/LLM out of the box so it can be
-smoke-tested with no Ollama instance available yet.
+FastAPI backend implementing the ingestion -> scoring -> tailoring -> outreach pipeline. Can be run standalone against mock data/LLM settings, so it can be smoke-tested with no Ollama instance available (this is for mainly debugging the UI - Ollama can be quite heavy sometimes).
 
 ## Setup
 
@@ -15,112 +13,50 @@ Visit `http://localhost:8000/docs` for interactive Swagger docs.
 
 ## Configuration
 
-All config is via environment variables, prefixed `JOBRADAR_`. See `app/config.py`.
+Two layers:
+
+1. **Environment variables** (prefixed `JOBRADAR_`, see `app/config.py` / `.env.example`) - seed the initial config on first run only.
+2. **`GET`/`PUT /settings`** - the live, mutable config (Ollama URL, API key,
+   models, context size, mock mode for testing). Changes apply immediately with no restart, and persist to the DB. This is what the frontend's settings panel talks to.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `JOBRADAR_OLLAMA_BASE_URL` | `http://localhost:11434` | Point at `https://ollama.com` for Cloud |
+| `JOBRADAR_OLLAMA_BASE_URL` | `http://localhost:11434` | `https://ollama.com` for Cloud |
 | `JOBRADAR_OLLAMA_API_KEY` | none | Required for Ollama Cloud |
-| `JOBRADAR_OLLAMA_MODEL` | `llama3.1:8b` | Chat/reasoning model — swap to `gpt-oss:120b-cloud` etc. for cloud |
-| `JOBRADAR_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Must be an embedding-capable model — chat models (deepseek-r1, llama3.1) can't produce embeddings |
-| `JOBRADAR_MOCK_LLM` | `true` | Set `false` once a real Ollama endpoint is reachable |
-| `JOBRADAR_OLLAMA_NUM_CTX` | `2048` | Context window cap sent with every chat request — keeps Ollama's KV cache allocation small and predictable rather than trusting its own (sometimes oversized) VRAM-based default |
-
-With `MOCK_LLM=true` (the default), every endpoint returns deterministic
-canned data — useful for frontend development without any external dependency.
+| `JOBRADAR_OLLAMA_MODEL` | `llama3.1:8b` | Chat/reasoning model |
+| `JOBRADAR_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Must be embedding-capable — chat models can't produce embeddings |
+| `JOBRADAR_OLLAMA_NUM_CTX` | `4096` | Context window cap, keeps KV cache allocation predictable |
+| `JOBRADAR_MOCK_LLM` | `false` | Every LLM call returns deterministic canned data if set to `true` |
 
 ## Structure
 
-- `app/services/ollama_client.py` — single client used for both local and
-  cloud Ollama, since the API shape is identical; reads connection details
-  from `ollama_runtime` on every call so mode switches apply without a restart.
-  Also exposes `embed()` for real text embeddings via `/api/embed`.
-- `app/services/ollama_runtime.py` — mutable in-memory state for the active
-  Ollama mode (local / cloud-free / cloud-pro), switchable via
-  `PATCH /ollama/status`. Not persisted across restarts by design; falls back
-  to `JOBRADAR_OLLAMA_BASE_URL`/`JOBRADAR_OLLAMA_MODEL` on process start.
-- `app/services/parsing.py` — resume text extraction (pypdf) + semantic
-  chunking, plus `clean_job_posting_text()` for stripping common boilerplate
-  (equal-opportunity statements, copyright footers) from pasted postings.
-- `app/services/ingest.py` — the job-adding pipeline: takes a raw pasted
-  posting (often messy — nav menus, cookie banners, repeated "Apply now"
-  buttons mixed in from a browser copy-paste), regex-strips obvious
-  boilerplate, then uses the LLM to extract title/company (if not typed in)
-  and produce a cleaned description body with the rest of the noise removed.
-- `app/services/vector_store.py` — in-memory embedding index using real
-  vectors from `ollama_client.embed()` (or a deterministic mock embedding in
-  `MOCK_LLM` mode) with cosine similarity. Stand-in for a real
-  Qdrant/ChromaDB deployment; swap the storage/search internals here and
-  nothing in `scoring.py` needs to change.
-- `app/services/scoring.py` — the explainability core: baseline similarity +
-  LLM-generated match/gap breakdown, blockers penalized explicitly.
+- `app/services/ollama_client.py` — chat + embedding calls to Ollama. Reads connection details from `runtime_config` on every call, so settings changes apply live.
+- `app/services/runtime_config.py` — the single mutable source of truth for Ollama connection/model/context settings, seeded from env vars and updatable via `/settings` or `/ollama/status` (mode presets).
+- `app/services/settings_persistence.py` — loads/saves `runtime_config` to the DB so changes survive a restart.
+- `app/services/parsing.py` — resume text extraction (pypdf) + semantic chunking, plus boilerplate stripping for pasted postings.
+- `app/services/ingest.py` — cleans a raw pasted job posting and extracts title/company via LLM when not typed in.
+- `app/services/vector_store.py` — in-memory embedding index with cosine similarity; stand-in for a real vector DB.
+- `app/services/scoring.py` — fit score + explainable match/gap breakdown.
 - `app/services/tailoring.py` — bullet rewriting and outreach draft generation.
-- `app/db.py` / `app/models/db_models.py` — SQLite persistence via SQLModel.
-  Auto-creates `jobradar.db` on first run; survives restarts.
-- `app/logging_config.py` — structured logging (timestamps, level, logger
-  name) instead of scattered `print()` calls. A request-timing middleware in
-  `main.py` logs method/path/status/duration for every request.
-- `app/routers/` — HTTP layer, one router per resource. `POST /jobs` is the
-  only job-ingestion path — see "No automated scraping" below.
+- `app/db.py` / `app/models/db_models.py` — SQLite via SQLModel.
+- `app/logging_config.py` — structured logging; a request-timing middleware in `main.py` logs method/path/status/duration for every request.
+- `app/routers/` — HTTP layer. `POST /jobs` (paste-and-clean) is the only job-ingestion path — no automated scraping (tried, pulled — see below).
 
-Copy `.env.example` to `.env` (or just set the env vars directly) to
-configure without editing code.
+tldr; Create a persona (and upload a resume) and add jobs through the UI or API as described in the READMES.
 
-No fixture/dummy data is seeded — the app starts genuinely empty. Create a
-persona (upload a resume) and add jobs through the UI or API before there's
-anything to see.
+## Why no automated scraping???
 
-## No automated scraping
+The original plan was to have Greenhouse/Lever API scraping and company-site HTML/headless-browser scraping, which were both originally built but then removed: API results were inconsistent across boards, JS-rendered career pages needed a full headless browser for fairly fragile payoff, and scraping career pages sits in a legal grey area regardless of technical robustness. Paste-and-clean (`services/ingest.py`) doesn't care what shape the source page was in, since a human already found and copied the posting.
 
-An earlier version of this backend fetched postings automatically from
-Greenhouse/Lever APIs and scraped company career pages (including a headless
-Chromium fallback for JS-rendered SPAs). It was pulled:
+## Known gaps
 
-- Greenhouse/Lever API results were inconsistent in practice — empty results
-  for boards that clearly existed, unclear whether that meant "wrong slug"
-  or "company restricts API access" or something else entirely
-- Company-site scraping needed a full headless browser for most real career
-  pages (React/Vue SPAs), which is heavy infrastructure for something this
-  fragile, and ran into environment-specific issues (a Windows/uvicorn/
-  Playwright event-loop conflict, for one)
-- Scraping companies' career pages sits in a legal grey area ToS-wise,
-  regardless of technical robustness
+- SQLite → needs Postgres for concurrent multi-user access
+- In-memory embedding index → needs real Qdrant/ChromaDB at scale
+- No auth/session layer — every request is unscoped to any user
+- Settings are global process state, not per-user
+- `SIMILARITY_FLOOR`/`SIMILARITY_CEILING` in `scoring.py` are a rough calibration against `nomic-embed-text`, not a measured one (so it's kinda bad)
+- No migration system (no Alembic) - `main.py` has an ad-hoc `ALTER TABLE` guard for the one column added post-hoc so far. I'm not planning on adding more, but probably should.
 
-`POST /jobs` (paste-and-clean, via `services/ingest.py`) is the one ingestion
-path now, and gets the investment instead: it doesn't care what shape the
-source page was in, since a human already did the hard part of finding and
-copying the posting.
+## !!! Model quality affects scoring more than you'd expect !!!
 
-## Known gaps before this is production-ready
-
-- SQLite → fine for local dev, but needs Postgres for concurrent multi-user access
-- In-memory embedding index → needs real Qdrant/ChromaDB once resume/job
-  volume outgrows a single process's memory
-- No auth/session layer — every request is currently unscoped to any user
-- Ollama mode is global process state, not per-user — fine for a single-desk
-  app, not for multi-tenant use
-- The ingest LLM extraction (`services/ingest.py`) hasn't been tuned against
-  a wide variety of real pasted postings yet
-- The similarity rescaling constants in `services/scoring.py`
-  (`SIMILARITY_FLOOR`/`SIMILARITY_CEILING`) are a rough calibration, not a
-  measured one — worth re-tuning once you've scored a batch of real postings
-  against a real embedding model and can see where genuinely strong/weak
-  matches land
-- No proper schema migration system (no Alembic) — `app/main.py` has a small
-  ad-hoc `ALTER TABLE` guard for the one column added post-hoc so far
-  (`jobs.persona_id`); further schema changes will need the same treatment
-  or a real migration tool
-
-## Model quality matters more than you'd expect
-
-Gap/blocker classification (`services/scoring.py`) is a genuinely hard
-judgment call, and small edge models (1-2B parameters) are noticeably less
-reliable at it than larger ones — they tend to over-flag things as "blocker"
-that a stronger model would correctly call "minor" or not mention at all.
-The scoring prompt pushes toward conservative classification and the
-blocker penalty is now capped rather than able to crater a score entirely,
-but if scores still feel too harsh or a job you know you're a good fit for
-scores lower than one you aren't, that's most likely model quality, not
-just calibration — worth comparing behavior against a larger model
-(`llama3.1:8b` or bigger) if `JOBRADAR_OLLAMA_MODEL` is currently pointed at
-something small.
+Gap/blocker classification is a hard judgment call, and through testing I found out that small models (1-2B params) are noticeably less reliable at it. They tend to over-flag "blockers" where a larger model would correctly call something "minor," or even worse, do the other way around. If a job you know you're a good fit for scores lower than one you aren't (or vice versa), that's most likely model quality, not calibration. You can change this by using a larger chat model, though, hence support for Ollama's very generous cloud API.

@@ -1,4 +1,4 @@
-import { Job, JobStatus, OllamaStatus, Persona } from "./types";
+import { BackendSettings, Job, JobStatus, OllamaStatus, Persona } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -91,5 +91,13 @@ export const api = {
     request<OllamaStatus>("/ollama/status", {
       method: "PATCH",
       body: JSON.stringify({ mode })
+    }),
+
+  getSettings: () => request<BackendSettings>("/settings"),
+
+  updateSettings: (payload: Partial<Omit<BackendSettings, "mode">>) =>
+    request<BackendSettings>("/settings", {
+      method: "PUT",
+      body: JSON.stringify(payload)
     })
 };

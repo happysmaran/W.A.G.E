@@ -16,7 +16,17 @@ export interface Persona {
 
 export type WorkMode = "remote" | "hybrid" | "onsite";
 
-export type JobSource = "greenhouse" | "lever" | "ashby" | "company-site" | "board";
+export type JobSource = "pasted";
+
+export interface BackendSettings {
+  mode: OllamaMode;
+  base_url: string;
+  api_key: string | null;
+  model: string;
+  embedding_model: string;
+  num_ctx: number;
+  mock_llm: boolean;
+}
 
 export interface GapItem {
   id: string;

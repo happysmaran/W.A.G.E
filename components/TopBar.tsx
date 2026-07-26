@@ -6,6 +6,7 @@ import { Job, OllamaStatus } from "@/lib/types";
 interface TopBarProps {
   jobs: Job[];
   ollamaStatus: OllamaStatus;
+  onOpenSettings: () => void;
 }
 
 function useClock() {
@@ -22,7 +23,7 @@ function formatTime(d: Date) {
   return d.toLocaleTimeString("en-US", { hour12: false });
 }
 
-export function TopBar({ jobs, ollamaStatus }: TopBarProps) {
+export function TopBar({ jobs, ollamaStatus, onOpenSettings }: TopBarProps) {
   const now = useClock();
   const avgScore = jobs.length ? Math.round(jobs.reduce((sum, j) => sum + j.score, 0) / jobs.length) : null;
   const activeCount = jobs.filter((j) => j.status !== "archived").length;
@@ -43,6 +44,9 @@ export function TopBar({ jobs, ollamaStatus }: TopBarProps) {
           <span className="text-ink-muted hidden sm:inline">{ollamaStatus.mode}</span>
         </div>
         <span className="text-ink-secondary tabular-nums">{now ? formatTime(now) : "--:--:--"}</span>
+        <button onClick={onOpenSettings} className="text-ink-muted hover:text-ink-primary" aria-label="Settings">
+          ⚙
+        </button>
       </div>
     </div>
   );

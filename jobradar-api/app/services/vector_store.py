@@ -14,17 +14,10 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 
 class ResumeVectorIndex:
-    """
-    In-memory embedding index. Chunks are embedded once via Ollama's
-    /api/embeddings (real call in production, deterministic mock in dev — see
-    ollama_client.embed) and cached; job descriptions are embedded per-query
-    and compared by cosine similarity.
+    """In-memory embedding index with cosine similarity.
 
-    This is a stand-in for a real vector database (Qdrant/ChromaDB) sized for
-    a single-process demo. The swap point is index_resume/best_matches: move
-    the embedding storage and similarity search into a Qdrant client here and
-    nothing in services/scoring.py needs to change, since it only depends on
-    getting a 0-1 similarity score back per chunk.
+    Stand-in for a real vector DB (Qdrant/ChromaDB). Swap the storage/search
+    internals here and nothing in services/scoring.py needs to change.
     """
 
     def __init__(self) -> None:

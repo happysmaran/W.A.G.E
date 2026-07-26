@@ -12,21 +12,16 @@ from app.config import settings
 from app.db import create_db_and_tables, engine
 from app.logging_config import logger, setup_logging
 from app.models.db_models import ResumeChunkDB
-from app.routers import jobs, ollama, personas
+from app.routers import jobs, ollama, personas, settings as settings_router
+from app.services.runtime_config import runtime_config
+from app.services.settings_persistence import load_runtime_config
 from app.services.vector_store import vector_index
 
 setup_logging()
 
 
 def _migrate_add_missing_columns() -> None:
-    """
-    SQLModel's create_all only creates missing tables, not missing columns on
-    existing tables — so a schema change like adding JobDB.persona_id won't
-    apply to a jobradar.db file created by an earlier version. This is a
-    minimal ad-hoc patch, not a real migration system (no Alembic set up
-    yet); it only handles the specific columns this app has added post-hoc.
-    Safe to run every startup — checks before altering.
-    """
+    """Ad-hoc column migration — SQLModel's create_all only creates missing tables, not columns."""
     with engine.connect() as conn:
         existing_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(jobs)")}
         if existing_columns and "persona_id" not in existing_columns:
@@ -39,12 +34,16 @@ def _migrate_add_missing_columns() -> None:
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     _migrate_add_missing_columns()
+
     with Session(engine) as session:
-        # Rebuild the in-process vector index from persisted resume chunks.
-        # The vector store itself is in-memory (see services/vector_store.py),
-        # so it needs re-seeding from the DB on every process restart. No
-        # fixture data is seeded here — personas and jobs only exist once a
-        # real resume is uploaded and a real job is added or discovered.
+        saved_config = load_runtime_config(session)
+        if saved_config:
+            runtime_config.load(saved_config)
+
+        # Vector index is in-memory, so rebuild it from persisted resume
+        # chunks on every restart. Skips silently if Ollama isn't reachable
+        # for a given persona - that persona's scoring will error clearly
+        # later rather than blocking the whole app from starting.
         chunks = session.exec(select(ResumeChunkDB)).all()
         by_persona: dict[str, list[dict]] = {}
         for chunk in chunks:
@@ -53,21 +52,9 @@ async def lifespan(app: FastAPI):
             try:
                 await vector_index.index_resume(persona_id, persona_chunks)
             except Exception as exc:
-                # Don't let a missing/unreachable Ollama model take the whole
-                # API down at startup. Log it and continue — /jobs/score for
-                # this persona will fail with a clear error until the model
-                # is pulled and reachable, but everything else keeps working.
-                logger.warning(
-                    "Failed to index resume for persona '%s': %s\n"
-                    "  This usually means the configured Ollama model isn't pulled yet, "
-                    "or Ollama isn't running/reachable at the configured base URL.\n"
-                    "  Run `ollama pull <model>` and `ollama list` to check, or set "
-                    "JOBRADAR_MOCK_LLM=true to run without a live Ollama instance.",
-                    persona_id,
-                    exc,
-                )
+                logger.warning("Failed to index resume for persona '%s': %s", persona_id, exc)
 
-    logger.info("startup complete — mock_llm=%s ollama_base_url=%s", settings.mock_llm, settings.ollama_base_url)
+    logger.info("startup complete — mock_llm=%s base_url=%s", runtime_config.state.mock_llm, runtime_config.state.base_url)
     yield
     logger.info("shutting down")
 
@@ -75,7 +62,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="JobRadar API",
     description="Ingestion, scoring, tailoring, and outreach pipeline for job search strategy.",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -100,28 +87,19 @@ async def log_requests(request: Request, call_next):
 app.include_router(personas.router)
 app.include_router(jobs.router)
 app.include_router(ollama.router)
+app.include_router(settings_router.router)
 
 
 @app.exception_handler(RuntimeError)
 async def ollama_runtime_error_handler(request: Request, exc: RuntimeError):
-    # services/ollama_client.py raises plain RuntimeError (not an
-    # HTTPException) for anything Ollama-related — connection refused, model
-    # not pulled, request rejected with a 500 from Ollama itself, etc. Catch
-    # it here once so every endpoint that eventually calls into Ollama gets a
-    # clean, readable 502 with the actual diagnostic message instead of a
-    # bare unhandled-exception 500.
+    """Ollama-related failures raise plain RuntimeError; surface as a clean 502 instead of an unhandled 500."""
     logger.error("Ollama error on %s: %s", request.url.path, exc)
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
 @app.get("/")
 async def root():
-    return {
-        "service": "jobradar-api",
-        "version": app.version,
-        "mock_llm": settings.mock_llm,
-        "docs": "/docs",
-    }
+    return {"service": "jobradar-api", "version": app.version, "docs": "/docs"}
 
 
 @app.get("/health")
