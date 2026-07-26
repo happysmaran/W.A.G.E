@@ -93,3 +93,4 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+*.db
