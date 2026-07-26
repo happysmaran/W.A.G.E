@@ -64,7 +64,7 @@ async def _render_async(url: str, timeout_ms: int) -> str:
             browser = await p.chromium.launch()
             try:
                 page = await browser.new_page(
-                    user_agent="Mozilla/5.0 (compatible; JobRadar/0.1; +https://github.com)"
+                    user_agent="Mozilla/5.0 (compatible; WAGE/0.1; +https://github.com)"
                 )
                 await page.goto(url, timeout=timeout_ms, wait_until="networkidle")
                 return await page.content()

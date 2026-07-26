@@ -213,7 +213,7 @@ async def fetch_company_site(url: str) -> dict:
 
 async def _fetch_static_html(url: str) -> str:
     async with httpx.AsyncClient(
-        timeout=15.0, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (compatible; JobRadar/0.1)"}
+        timeout=15.0, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (compatible; WAGE/0.1)"}
     ) as client:
         response = await client.get(url)
         response.raise_for_status()

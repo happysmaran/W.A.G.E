@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="JobRadar API",
+    title="WAGE API",
     description="Ingestion, scoring, tailoring, and outreach pipeline for job search strategy.",
     version="0.4.0",
     lifespan=lifespan,
@@ -99,7 +99,7 @@ async def ollama_runtime_error_handler(request: Request, exc: RuntimeError):
 
 @app.get("/")
 async def root():
-    return {"service": "jobradar-api", "version": app.version, "docs": "/docs"}
+    return {"service": "WAGE-api", "version": app.version, "docs": "/docs"}
 
 
 @app.get("/health")

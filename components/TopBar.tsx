@@ -31,7 +31,7 @@ export function TopBar({ jobs, ollamaStatus, onOpenSettings }: TopBarProps) {
   return (
     <div className="w-full border-b border-base-line bg-base-bg px-4 py-2 flex items-center justify-between text-[11px] font-mono uppercase tracking-wideish">
       <div className="flex items-center gap-5">
-        <span className="text-ink-primary font-medium tracking-wide">JOBRADAR</span>
+        <span className="text-ink-primary font-medium tracking-wide">W.A.G.E</span>
         <span className="text-ink-muted hidden sm:inline">TRACKED {jobs.length}</span>
         <span className="text-ink-muted hidden sm:inline">ACTIVE {activeCount}</span>
         <span className="text-ink-muted hidden md:inline">

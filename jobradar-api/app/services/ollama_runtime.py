@@ -40,7 +40,7 @@ class OllamaRuntime:
     instead of only reflecting a value baked in at process start.
 
     Not persisted across restarts by design for now — a restart falls back
-    to JOBRADAR_OLLAMA_BASE_URL / JOBRADAR_OLLAMA_MODEL from the environment.
+    to WAGE_OLLAMA_BASE_URL / WAGE_OLLAMA_MODEL from the environment.
     Worth moving into the DB alongside a user/session concept once this is
     multi-user rather than single-desk-instance.
     """

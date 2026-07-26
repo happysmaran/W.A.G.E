@@ -1,6 +1,6 @@
-# JobRadar
+# W.A.G.E
 
-A local-first job search strategy tool: upload your resume, paste job postings, get an explainable fit score, a tailored resume bullet, and a first-draft outreach message, all powered by a local (or cloud) Ollama model.
+W.A.G.E (Work Aggregation and Guidance Engine) is a local-first job search strategy tool: upload your resume, paste job postings, get an explainable fit score, a tailored resume bullet, and a first-draft outreach message, all powered by a local (or cloud) Ollama model.
 
 ## Structure
 
@@ -16,7 +16,6 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 
 # Terminal 2 - frontend
-cp .env.local.example .env.local
 npm install
 npm run dev
 ```
@@ -36,11 +35,11 @@ Embedding models and chat models are not interchangeable; chat models (`deepseek
 
 ## How to use
 
-1. **Upload a resume** (sidebar → *+ Add persona*) — extracted, chunked, and embedded for similarity scoring.
-2. **Paste a job posting** (*+ Add job*) — cleaned up automatically (nav menus, cookie banners, etc. stripped) and scored against your resume.
-3. **Review the score breakdown** in the Battle Room — concrete matches and gaps, not just a number.
-4. **Generate** a tailored resume bullet and a first-draft outreach message — both editable before you use them anywhere.
-5. **Track status** (Inbox → Reviewing → Applied → Archived) and delete what you don't need.
+1. **Upload a resume** (sidebar -> *+ Add persona*) - extracted, chunked, and embedded for similarity scoring.
+2. **Paste a job posting** (*+ Add job*) - cleaned up automatically (nav menus, cookie banners, etc. stripped) and scored against your resume.
+3. **Review the score breakdown** in the Battle Room - concrete matches and gaps, not just a number.
+4. **Generate** a tailored resume bullet and a first-draft outreach message - both editable before you use them anywhere.
+5. **Track status** (Inbox -> Reviewing -> Applied -> Archived) and delete what you don't need.
 
 ## Known Limitations
 
@@ -49,3 +48,5 @@ Embedding models and chat models are not interchangeable; chat models (`deepseek
 - **No production-grade vector DB.** In-memory cosine similarity stands in for Qdrant/ChromaDB, which is fine at personal scale.
 
 See the backend's sub README for more info.
+
+(note that this software was originally called 'jobradar' so you may see it being referenced as that somewhere.)

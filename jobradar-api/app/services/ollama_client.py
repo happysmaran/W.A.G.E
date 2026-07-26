@@ -53,7 +53,7 @@ class OllamaClient:
                 if any(s in body.lower() for s in ("out of memory", "cudamalloc", "failed to allocate")):
                     raise RuntimeError(
                         f"Ollama ran out of GPU memory loading '{state.model}': {body}\n"
-                        f"This is a GPU/driver-level allocation failure, not something JobRadar's "
+                        f"This is a GPU/driver-level allocation failure, not something WAGE's "
                         f"request caused directly. A few things to try:\n"
                         f"  1. `ollama ps` to check whether another model is already loaded and holding "
                         f"VRAM — `ollama stop <model>` to free it, or set OLLAMA_MAX_LOADED_MODELS=1.\n"

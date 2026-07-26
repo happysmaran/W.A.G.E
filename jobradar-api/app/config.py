@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     After startup, settings are mutable via the /settings API (see
     services/runtime_config.py) and persisted to the DB — these env vars
-    only matter for the very first run, or after clearing jobradar.db.
+    only matter for the very first run, or after clearing WAGE.db.
     """
 
     ollama_base_url: str = "http://localhost:11434"
@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
 
     class Config:
-        env_prefix = "JOBRADAR_"
+        env_prefix = "WAGE_"
 
 
 settings = Settings()

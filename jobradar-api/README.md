@@ -1,4 +1,4 @@
-# JobRadar API
+# W.A.G.E API
 
 FastAPI backend implementing the ingestion -> scoring -> tailoring -> outreach pipeline. Can be run standalone against mock data/LLM settings, so it can be smoke-tested with no Ollama instance available (this is for mainly debugging the UI - Ollama can be quite heavy sometimes).
 
@@ -15,18 +15,18 @@ Visit `http://localhost:8000/docs` for interactive Swagger docs.
 
 Two layers:
 
-1. **Environment variables** (prefixed `JOBRADAR_`, see `app/config.py` / `.env.example`) - seed the initial config on first run only.
+1. **Environment variables** (prefixed `WAGE_`, see `app/config.py` / `.env.example`) - seed the initial config on first run only.
 2. **`GET`/`PUT /settings`** - the live, mutable config (Ollama URL, API key,
    models, context size, mock mode for testing). Changes apply immediately with no restart, and persist to the DB. This is what the frontend's settings panel talks to.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `JOBRADAR_OLLAMA_BASE_URL` | `http://localhost:11434` | `https://ollama.com` for Cloud |
-| `JOBRADAR_OLLAMA_API_KEY` | none | Required for Ollama Cloud |
-| `JOBRADAR_OLLAMA_MODEL` | `llama3.1:8b` | Chat/reasoning model |
-| `JOBRADAR_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Must be embedding-capable — chat models can't produce embeddings |
-| `JOBRADAR_OLLAMA_NUM_CTX` | `4096` | Context window cap, keeps KV cache allocation predictable |
-| `JOBRADAR_MOCK_LLM` | `false` | Every LLM call returns deterministic canned data if set to `true` |
+| `WAGE_OLLAMA_BASE_URL` | `http://localhost:11434` | `https://ollama.com` for Cloud |
+| `WAGE_OLLAMA_API_KEY` | none | Required for Ollama Cloud |
+| `WAGE_OLLAMA_MODEL` | `llama3.1:8b` | Chat/reasoning model |
+| `WAGE_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Must be embedding-capable — chat models can't produce embeddings |
+| `WAGE_OLLAMA_NUM_CTX` | `4096` | Context window cap, keeps KV cache allocation predictable |
+| `WAGE_MOCK_LLM` | `false` | Every LLM call returns deterministic canned data if set to `true` |
 
 ## Structure
 

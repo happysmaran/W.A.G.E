@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlmodel import Session, SQLModel, create_engine
 
-DATABASE_URL = "sqlite:///./jobradar.db"
+DATABASE_URL = "sqlite:///./WAGE.db"
 
 # check_same_thread=False is safe here because FastAPI's default dependency
 # injection opens/closes a fresh session per request rather than sharing one

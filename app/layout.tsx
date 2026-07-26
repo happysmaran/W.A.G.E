@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "JobRadar",
+  title: "WAGE",
   description: "Pre-application strategy mission control"
 };
 
