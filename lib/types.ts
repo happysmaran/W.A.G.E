@@ -1,4 +1,9 @@
-export type OllamaMode = "cloud-free" | "cloud-pro" | "local";
+export type OllamaMode = "local" | "cloud";
+
+export interface EmbeddingStatus {
+  status: "not_started" | "loading" | "ready" | "error";
+  error: string | null;
+}
 
 export interface OllamaStatus {
   mode: OllamaMode;
@@ -23,7 +28,6 @@ export interface BackendSettings {
   base_url: string;
   api_key: string | null;
   model: string;
-  embedding_model: string;
   num_ctx: number;
   mock_llm: boolean;
 }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from app.services.ollama_client import ollama_client
+from app.services.embedding_client import embedding_client
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -27,7 +27,7 @@ class ResumeVectorIndex:
     async def index_resume(self, persona_id: str, chunks: list[dict]) -> None:
         embedded = []
         for chunk in chunks:
-            vector = await ollama_client.embed(chunk["text"])
+            vector = await embedding_client.embed(chunk["text"])
             embedded.append({"section": chunk["section"], "text": chunk["text"], "embedding": vector})
         self._chunks[persona_id] = embedded
 
@@ -39,7 +39,7 @@ class ResumeVectorIndex:
         if not chunks:
             return []
 
-        job_vector = await ollama_client.embed(job_text)
+        job_vector = await embedding_client.embed(job_text)
         scored = [
             ({"section": c["section"], "text": c["text"]}, _cosine(c["embedding"], job_vector))
             for c in chunks

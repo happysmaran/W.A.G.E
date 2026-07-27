@@ -9,7 +9,7 @@ import { AddJobModal } from "@/components/AddJobModal";
 import { TopBar } from "@/components/TopBar";
 import { SettingsModal } from "@/components/SettingsModal";
 import { api } from "@/lib/api";
-import { Job, OllamaStatus, Persona, WorkMode } from "@/lib/types";
+import { EmbeddingStatus, Job, OllamaStatus, Persona, WorkMode } from "@/lib/types";
 
 export default function DashboardPage() {
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -21,6 +21,10 @@ export default function DashboardPage() {
     mode: "local",
     model: "connecting...",
     connected: false
+  });
+  const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatus>({
+    status: "not_started",
+    error: null
   });
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,6 +69,26 @@ export default function DashboardPage() {
     };
   }, []);
 
+  // Poll the bundled local embedding model's first-run download/load status
+  // until it settles, so the UI can show "preparing matching model..."
+  // instead of the first resume upload just silently hanging.
+  useEffect(() => {
+    if (embeddingStatus.status === "ready" || embeddingStatus.status === "error") return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      try {
+        const status = await api.getEmbeddingStatus();
+        if (!cancelled) setEmbeddingStatus(status);
+      } catch {
+        // keep polling silently; the API may just not be up yet
+      }
+    }, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [embeddingStatus.status]);
+
   const refetchJobs = useCallback(async (personaId: string) => {
     try {
       const jobList = await api.listJobs(personaId);
@@ -89,11 +113,10 @@ export default function DashboardPage() {
     setWorkModes((prev) => (prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode]));
   }
 
-  // Cycles local -> cloud-free -> cloud-pro -> local, calling the real
-  // backend switch endpoint so the change actually takes effect server-side.
+  // Toggles local <-> cloud, calling the real backend switch endpoint so
+  // the change actually takes effect server-side.
   async function handleToggleOllama() {
-    const nextMode =
-      ollamaStatus.mode === "local" ? "cloud-free" : ollamaStatus.mode === "cloud-free" ? "cloud-pro" : "local";
+    const nextMode = ollamaStatus.mode === "local" ? "cloud" : "local";
     const previous = ollamaStatus;
     setOllamaStatus((prev) => ({ ...prev, mode: nextMode, connected: false }));
     try {
@@ -184,7 +207,12 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen flex flex-col">
-      <TopBar jobs={jobs} ollamaStatus={ollamaStatus} onOpenSettings={() => setShowSettings(true)} />
+      <TopBar
+        jobs={jobs}
+        ollamaStatus={ollamaStatus}
+        embeddingStatus={embeddingStatus}
+        onOpenSettings={() => setShowSettings(true)}
+      />
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
       <PersonaVault
         personas={personas}

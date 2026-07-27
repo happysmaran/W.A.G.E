@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Job, OllamaStatus } from "@/lib/types";
+import { EmbeddingStatus, Job, OllamaStatus } from "@/lib/types";
 
 interface TopBarProps {
   jobs: Job[];
   ollamaStatus: OllamaStatus;
+  embeddingStatus: EmbeddingStatus;
   onOpenSettings: () => void;
 }
 
@@ -23,7 +24,7 @@ function formatTime(d: Date) {
   return d.toLocaleTimeString("en-US", { hour12: false });
 }
 
-export function TopBar({ jobs, ollamaStatus, onOpenSettings }: TopBarProps) {
+export function TopBar({ jobs, ollamaStatus, embeddingStatus, onOpenSettings }: TopBarProps) {
   const now = useClock();
   const avgScore = jobs.length ? Math.round(jobs.reduce((sum, j) => sum + j.score, 0) / jobs.length) : null;
   const activeCount = jobs.filter((j) => j.status !== "archived").length;
@@ -39,6 +40,14 @@ export function TopBar({ jobs, ollamaStatus, onOpenSettings }: TopBarProps) {
         </span>
       </div>
       <div className="flex items-center gap-4">
+        {embeddingStatus.status === "loading" && (
+          <span className="text-ink-muted hidden sm:inline animate-pulse">PREPARING MATCHING MODEL...</span>
+        )}
+        {embeddingStatus.status === "error" && (
+          <span className="text-signal-stop hidden sm:inline" title={embeddingStatus.error ?? undefined}>
+            MATCHING MODEL FAILED
+          </span>
+        )}
         <div className="flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 ${ollamaStatus.connected ? "bg-signal-go" : "bg-signal-stop"}`} />
           <span className="text-ink-muted hidden sm:inline">{ollamaStatus.mode}</span>

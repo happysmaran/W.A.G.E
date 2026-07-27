@@ -15,7 +15,6 @@ class SettingsUpdate(BaseModel):
     base_url: str | None = None
     api_key: str | None = None
     model: str | None = None
-    embedding_model: str | None = None
     num_ctx: int | None = None
     mock_llm: bool | None = None
 

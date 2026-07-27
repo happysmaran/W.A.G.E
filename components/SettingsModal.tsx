@@ -14,7 +14,6 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
-  const [embeddingModel, setEmbeddingModel] = useState("");
   const [numCtx, setNumCtx] = useState(2048);
   const [mockLlm, setMockLlm] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -29,7 +28,6 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
         setSettings(s);
         setBaseUrl(s.base_url);
         setModel(s.model);
-        setEmbeddingModel(s.embedding_model);
         setNumCtx(s.num_ctx);
         setMockLlm(s.mock_llm);
       })
@@ -45,7 +43,6 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
       const payload: Partial<Omit<BackendSettings, "mode">> = {
         base_url: baseUrl,
         model,
-        embedding_model: embeddingModel,
         num_ctx: numCtx,
         mock_llm: mockLlm
       };
@@ -102,27 +99,18 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
               />
             </div>
 
-            <div className="flex gap-3 mb-3">
-              <div className="flex-1">
-                <label className="text-[11px] font-mono text-ink-muted uppercase tracking-wideish block mb-1">
-                  Chat model
-                </label>
-                <input
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="w-full bg-base-card border border-base-line px-2.5 py-2 text-sm text-ink-primary font-mono focus:outline-none focus:border-ink-secondary"
-                />
-              </div>
-              <div className="flex-1">
-                <label className="text-[11px] font-mono text-ink-muted uppercase tracking-wideish block mb-1">
-                  Embedding model
-                </label>
-                <input
-                  value={embeddingModel}
-                  onChange={(e) => setEmbeddingModel(e.target.value)}
-                  className="w-full bg-base-card border border-base-line px-2.5 py-2 text-sm text-ink-primary font-mono focus:outline-none focus:border-ink-secondary"
-                />
-              </div>
+            <div className="mb-3">
+              <label className="text-[11px] font-mono text-ink-muted uppercase tracking-wideish block mb-1">
+                Chat model
+              </label>
+              <input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="w-full bg-base-card border border-base-line px-2.5 py-2 text-sm text-ink-primary font-mono focus:outline-none focus:border-ink-secondary"
+              />
+              <p className="text-[11px] text-ink-muted mt-1">
+                Resume matching runs on a small bundled local model — no setup needed, same in local or cloud mode.
+              </p>
             </div>
 
             <div className="mb-4">

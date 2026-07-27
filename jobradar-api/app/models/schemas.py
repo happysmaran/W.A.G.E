@@ -28,9 +28,8 @@ class GapSeverity(str, Enum):
 
 
 class OllamaMode(str, Enum):
-    cloud_free = "cloud-free"
-    cloud_pro = "cloud-pro"
     local = "local"
+    cloud = "cloud"
 
 
 class Persona(BaseModel):

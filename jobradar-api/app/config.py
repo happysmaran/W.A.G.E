@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_api_key: str | None = None
     ollama_model: str = "llama3.1:8b"
-    ollama_embedding_model: str = "nomic-embed-text"
     ollama_num_ctx: int = 4096
     mock_llm: bool = False
 

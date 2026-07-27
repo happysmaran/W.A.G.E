@@ -1,4 +1,4 @@
-import { BackendSettings, Job, JobStatus, OllamaStatus, Persona } from "./types";
+import { BackendSettings, EmbeddingStatus, Job, JobStatus, OllamaStatus, Persona } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -86,6 +86,8 @@ export const api = {
     }),
 
   getOllamaStatus: () => request<OllamaStatus>("/ollama/status"),
+
+  getEmbeddingStatus: () => request<EmbeddingStatus>("/embeddings/status"),
 
   switchOllamaMode: (mode: OllamaStatus["mode"]) =>
     request<OllamaStatus>("/ollama/status", {
