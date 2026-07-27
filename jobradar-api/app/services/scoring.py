@@ -6,12 +6,14 @@ from app.services.ollama_client import ollama_client
 from app.services.vector_store import vector_index
 
 SCORING_SYSTEM_PROMPT = """You are a precise job-fit analyst. Given a candidate's resume \
-chunks and a job description, identify concrete matches and concrete gaps.
+excerpts and a job description, identify concrete matches and concrete gaps.
 
 Rules:
 - Every match and gap must reference something specific and checkable (a named \
 tool, years of experience, a domain, a certification) — never vague statements \
 like "seems like a good fit".
+- Base matches and gaps only on what's actually present in the resume excerpts \
+provided — never invent skills, tools, or experience the candidate didn't list.
 - Mark a gap as "blocker" ONLY if the job description explicitly uses hard-requirement \
 language ("required", "must have", "X+ years required") AND the resume shows no \
 reasonably related experience at all. Default to "minor" whenever there's ambiguity —
@@ -33,6 +35,11 @@ SIMILARITY_CEILING = 0.65
 # strong match to near-zero.
 BLOCKER_PENALTY = 10
 MAX_BLOCKER_PENALTY = 25
+
+# How many resume chunks (by vector similarity to the job) to feed into the
+# gap-analysis prompt. Keeps the prompt focused on what's actually relevant
+# rather than dumping the whole resume in.
+MATCH_CONTEXT_TOP_K = 6
 
 
 def _rescale_similarity(raw: float) -> float:
@@ -56,17 +63,26 @@ async def score_job(persona_id: str, job_title: str, company: str, job_descripti
     """Produces a 0-100 fit score plus an explainable match/gap breakdown.
 
     The score comes from resume/JD vector similarity (a triage signal, not
-    gospel); the match/gap list comes from LLM reasoning over the same
-    inputs. Gap classification quality depends heavily on the chat model —
-    small models (1-2B params) tend to over-flag "blocker" where a larger
-    model would correctly call something "minor".
+    gospel); the match/gap list comes from LLM reasoning over the
+    highest-similarity resume chunks for this job. Gap classification
+    quality depends heavily on the chat model — small models (1-2B params)
+    tend to over-flag "blocker" where a larger model would correctly call
+    something "minor".
     """
     raw_similarity = await vector_index.overall_similarity(persona_id, job_description)
     baseline_score = round(_rescale_similarity(raw_similarity) * 100)
 
+    top_chunks = await vector_index.best_matches(persona_id, job_description, top_k=MATCH_CONTEXT_TOP_K)
+    resume_context = "\n".join(f"- [{chunk['section']}] {chunk['text']}" for chunk, _score in top_chunks)
+    if not resume_context:
+        resume_context = "(no resume on file for this persona)"
+
     analysis = await ollama_client.chat_json(
         system=SCORING_SYSTEM_PROMPT,
-        user=f"Job title: {job_title}\nCompany: {company}\nJob description:\n{job_description}",
+        user=(
+            f"Candidate resume excerpts (most relevant to this job):\n{resume_context}\n\n"
+            f"Job title: {job_title}\nCompany: {company}\nJob description:\n{job_description}"
+        ),
         mock_response=_mock_gap_analysis(job_description),
     )
 
