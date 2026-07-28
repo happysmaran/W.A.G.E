@@ -15,19 +15,21 @@ export function DiscoverJobsModal({ personaId, onClose, onImported }: DiscoverJo
   const [results, setResults] = useState<DiscoverResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [importingUrl, setImportingUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [importErrors, setImportErrors] = useState<Record<string, string>>({});
   const [searched, setSearched] = useState(false);
 
   async function handleSearch() {
     if (!query.trim()) return;
     setSearching(true);
-    setError(null);
+    setSearchError(null);
+    setImportErrors({});
     try {
       const found = await api.discoverJobs(query.trim());
       setResults(found);
       setSearched(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed.");
+      setSearchError(err instanceof Error ? err.message : "Search failed.");
     } finally {
       setSearching(false);
     }
@@ -35,7 +37,11 @@ export function DiscoverJobsModal({ personaId, onClose, onImported }: DiscoverJo
 
   async function handleImport(result: DiscoverResult) {
     setImportingUrl(result.url);
-    setError(null);
+    setImportErrors((prev) => {
+      const next = { ...prev };
+      delete next[result.url];
+      return next;
+    });
     try {
       const job = await api.importDiscoveredJob({
         personaId,
@@ -44,7 +50,8 @@ export function DiscoverJobsModal({ personaId, onClose, onImported }: DiscoverJo
       });
       onImported(job);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't import that posting.");
+      const message = err instanceof Error ? err.message : "Couldn't import that posting.";
+      setImportErrors((prev) => ({ ...prev, [result.url]: message }));
     } finally {
       setImportingUrl(null);
     }
@@ -76,10 +83,10 @@ export function DiscoverJobsModal({ personaId, onClose, onImported }: DiscoverJo
           </button>
         </div>
 
-        {error && <p className="text-xs text-signal-stop mb-3">{error}</p>}
+        {searchError && <p className="text-xs text-signal-stop mb-3">{searchError}</p>}
 
         <div className="max-h-80 overflow-y-auto flex flex-col gap-2">
-          {searched && results.length === 0 && !error && (
+          {searched && results.length === 0 && !searchError && (
             <p className="text-xs text-ink-muted">No results. Try a different query.</p>
           )}
           {results.map((result) => (
@@ -96,6 +103,11 @@ export function DiscoverJobsModal({ personaId, onClose, onImported }: DiscoverJo
                   {importingUrl === result.url ? "IMPORTING..." : "IMPORT"}
                 </button>
               </div>
+              {importErrors[result.url] && (
+                <p className="text-[11px] text-signal-stop leading-snug">
+                  Couldn't import this one: {importErrors[result.url]}
+                </p>
+              )}
             </div>
           ))}
         </div>

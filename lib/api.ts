@@ -2,6 +2,16 @@ import { BackendSettings, DiscoverResult, EmbeddingStatus, Job, JobStatus, Ollam
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+function extractErrorDetail(body: string): string {
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed?.detail === "string") return parsed.detail;
+  } catch {
+    // not JSON — fall through to raw text
+  }
+  return body;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -12,7 +22,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`API error ${res.status} on ${path}: ${body}`);
+    throw new Error(extractErrorDetail(body) || `Request to ${path} failed (${res.status}).`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -25,7 +35,7 @@ export const api = {
     const res = await fetch(`${API_BASE}/personas`, { method: "POST", body: formData });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`API error ${res.status} on /personas: ${body}`);
+      throw new Error(extractErrorDetail(body) || `Couldn't create persona (${res.status}).`);
     }
     return res.json();
   },
