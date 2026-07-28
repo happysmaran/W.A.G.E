@@ -9,3 +9,5 @@ numpy
 sqlmodel
 fastembed
 trafilatura
+playwright
+beautifulsoup4

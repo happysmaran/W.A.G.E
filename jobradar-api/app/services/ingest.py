@@ -40,9 +40,25 @@ async def parse_pasted_job(raw_text: str, title_hint: str = "", company_hint: st
     """
     pre_cleaned = clean_job_posting_text(raw_text)
 
+    # Heuristic for Greenhouse / Ashby titles from job discovery
+    # e.g., "Job Application for Software Engineer at Stripe"
+    if not company_hint and title_hint and " at " in title_hint:
+        parts = title_hint.rsplit(" at ", 1)
+        company_hint = parts[-1].strip()
+        if title_hint.startswith("Job Application for "):
+            title_hint = parts[0].replace("Job Application for ", "").strip()
+
+    hints = []
+    if title_hint: hints.append(f"Title hint: {title_hint}")
+    if company_hint: hints.append(f"Company hint: {company_hint}")
+    
+    user_prompt = f"Raw pasted posting:\n{pre_cleaned}"
+    if hints:
+        user_prompt = "\n".join(hints) + "\n\n" + user_prompt
+
     result = await ollama_client.chat_json(
         system=INGEST_SYSTEM_PROMPT,
-        user=f"Raw pasted posting:\n{pre_cleaned}",
+        user=user_prompt,
         mock_response=_mock_ingest(pre_cleaned),
     )
 

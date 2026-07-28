@@ -6,6 +6,7 @@ import httpx
 import trafilatura
 
 from app.services.runtime_config import runtime_config
+from app.services.renderer import render_page_html
 
 # Ollama's web_search/web_fetch are hosted endpoints on ollama.com, always
 # called there regardless of whether chat is running in "local" or "cloud"
@@ -168,8 +169,21 @@ class JobDiscoveryClient:
                 last_error = batch
                 continue
             for result in batch:
-                url = result["url"]
-                if not url or url in seen_urls or not _is_likely_posting_url(url):
+                url = result.get("url")
+                if not url:
+                    continue
+
+                if "boards.greenhouse.io/embed/job_app" in url:
+                    from urllib.parse import urlparse, parse_qs
+                    parsed = urlparse(url)
+                    params = parse_qs(parsed.query)
+                    company = params.get("for", [""])[0]
+                    token = params.get("token", [""])[0]
+                    if company and token:
+                        url = f"https://boards.greenhouse.io/{company}/jobs/{token}"
+                        result["url"] = url
+
+                if url in seen_urls or not _is_likely_posting_url(url):
                     continue
                 seen_urls.add(url)
                 merged.append(result)
@@ -207,6 +221,14 @@ class JobDiscoveryClient:
         extracted = trafilatura.extract(html, include_comments=False, include_tables=False)
         return extracted or ""
 
+    async def _render_fetch(self, url: str) -> str:
+        """Final fallback for JS-rendered SPA career pages. Spins up a headless Chromium
+        browser to render the page fully before extracting text.
+        """
+        html = await render_page_html(url)
+        extracted = trafilatura.extract(html, include_comments=False, include_tables=False)
+        return extracted or ""
+
     async def fetch(self, url: str) -> str:
         """Returns cleaned, readable page content. Tries Ollama's hosted
         web_fetch first (it does readability extraction server-side); if
@@ -235,6 +257,13 @@ class JobDiscoveryClient:
             if content.strip():
                 return content
         except Exception:
+            pass  # fall through to the render fetch below
+
+        try:
+            content = await self._render_fetch(url)
+            if content.strip():
+                return content
+        except Exception:
             pass  # fall through to the combined error below
 
         status_note = (
@@ -243,10 +272,10 @@ class JobDiscoveryClient:
             else "no readable content"
         )
         raise RuntimeError(
-            f"Couldn't fetch that page ({status_note}), and a direct fetch with a browser "
-            f"user-agent didn't get readable content either — this listing is likely rendered "
-            f"entirely client-side via JavaScript, which neither approach can execute. Try a "
-            f"different result, or open the link directly in a browser."
+            f"Couldn't fetch that page ({status_note}), and both a direct fetch and a headless "
+            f"browser fallback failed to extract readable content. The page might be protected "
+            f"against bots, or not contain text formatted like a job posting. Try a different "
+            f"result, or open the link directly in a browser."
         )
 
 

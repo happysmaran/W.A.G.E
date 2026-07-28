@@ -42,11 +42,22 @@ export function DiscoverJobsModal({ personaId, onClose, onImported }: DiscoverJo
       delete next[result.url];
       return next;
     });
+    let companyHint = "";
+    const titleMatch = result.title.match(/ at (.+?)$/i);
+    const snippetMatch = result.snippet.match(/ at (.+?)(?:\s+!|\s+\[|\.\.\.|$)/i);
+    
+    if (titleMatch && titleMatch[1]) {
+      companyHint = titleMatch[1].trim();
+    } else if (snippetMatch && snippetMatch[1]) {
+      companyHint = snippetMatch[1].trim();
+    }
+
     try {
       const job = await api.importDiscoveredJob({
         personaId,
         url: result.url,
-        titleHint: result.title
+        titleHint: result.title,
+        companyHint
       });
       onImported(job);
     } catch (err) {
