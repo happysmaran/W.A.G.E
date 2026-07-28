@@ -9,6 +9,7 @@ interface RadarFeedProps {
   selectedJobId: string | null;
   onSelectJob: (id: string) => void;
   onAddJob: () => void;
+  onDiscoverJobs: () => void;
 }
 
 const STATUS_TABS: { id: JobStatus; label: string }[] = [
@@ -18,7 +19,7 @@ const STATUS_TABS: { id: JobStatus; label: string }[] = [
   { id: "archived", label: "Archived" }
 ];
 
-export function RadarFeed({ jobs, selectedJobId, onSelectJob, onAddJob }: RadarFeedProps) {
+export function RadarFeed({ jobs, selectedJobId, onSelectJob, onAddJob, onDiscoverJobs }: RadarFeedProps) {
   const [statusFilter, setStatusFilter] = useState<JobStatus>("inbox");
 
   const counts = useMemo(() => {
@@ -62,6 +63,12 @@ export function RadarFeed({ jobs, selectedJobId, onSelectJob, onAddJob }: RadarF
           className="text-[11px] font-mono uppercase tracking-wideish text-ink-secondary hover:text-ink-primary border border-base-line px-3 py-1.5 transition-colors"
         >
           + Add job
+        </button>
+        <button
+          onClick={onDiscoverJobs}
+          className="text-[11px] font-mono uppercase tracking-wideish text-ink-secondary hover:text-ink-primary border border-base-line px-3 py-1.5 transition-colors"
+        >
+          Discover jobs
         </button>
       </div>
 

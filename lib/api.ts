@@ -1,4 +1,4 @@
-import { BackendSettings, EmbeddingStatus, Job, JobStatus, OllamaStatus, Persona } from "./types";
+import { BackendSettings, DiscoverResult, EmbeddingStatus, Job, JobStatus, OllamaStatus, Persona } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -49,6 +49,22 @@ export const api = {
         title: payload.title ?? "",
         company: payload.company ?? "",
         job_description: payload.jobDescription
+      })
+    }),
+
+  discoverJobs: (query: string, maxResults: number = 10) =>
+    request<DiscoverResult[]>(
+      `/jobs/discover?query=${encodeURIComponent(query)}&max_results=${maxResults}`
+    ),
+
+  importDiscoveredJob: (payload: { personaId: string; url: string; titleHint?: string; companyHint?: string }) =>
+    request<Job>("/jobs/discover/import", {
+      method: "POST",
+      body: JSON.stringify({
+        persona_id: payload.personaId,
+        url: payload.url,
+        title_hint: payload.titleHint ?? "",
+        company_hint: payload.companyHint ?? ""
       })
     }),
 

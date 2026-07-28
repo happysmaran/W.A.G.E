@@ -1,5 +1,11 @@
 export type OllamaMode = "local" | "cloud";
 
+export interface DiscoverResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
 export interface EmbeddingStatus {
   status: "not_started" | "loading" | "ready" | "error";
   error: string | null;
@@ -21,7 +27,7 @@ export interface Persona {
 
 export type WorkMode = "remote" | "hybrid" | "onsite";
 
-export type JobSource = "pasted";
+export type JobSource = "pasted" | "discovered";
 
 export interface BackendSettings {
   mode: OllamaMode;

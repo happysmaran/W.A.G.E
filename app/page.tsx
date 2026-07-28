@@ -6,6 +6,7 @@ import { RadarFeed } from "@/components/RadarFeed";
 import { BattleRoom } from "@/components/BattleRoom";
 import { UploadPersonaModal } from "@/components/UploadPersonaModal";
 import { AddJobModal } from "@/components/AddJobModal";
+import { DiscoverJobsModal } from "@/components/DiscoverJobsModal";
 import { TopBar } from "@/components/TopBar";
 import { SettingsModal } from "@/components/SettingsModal";
 import { api } from "@/lib/api";
@@ -31,6 +32,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [showUploadPersona, setShowUploadPersona] = useState(false);
   const [showAddJob, setShowAddJob] = useState(false);
+  const [showDiscoverJobs, setShowDiscoverJobs] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -166,6 +168,12 @@ export default function DashboardPage() {
     setSelectedJobId(job.id);
   }
 
+  function handleJobImported(job: Job) {
+    setJobs((prev) => [...prev, job]);
+    setShowDiscoverJobs(false);
+    setSelectedJobId(job.id);
+  }
+
   function handleJobDeleted(jobId: string) {
     setJobs((prev) => prev.filter((j) => j.id !== jobId));
     setSelectedJobId(null);
@@ -235,6 +243,7 @@ export default function DashboardPage() {
             selectedJobId={selectedJobId}
             onSelectJob={setSelectedJobId}
             onAddJob={() => setShowAddJob(true)}
+            onDiscoverJobs={() => setShowDiscoverJobs(true)}
           />
           {selectedJob && (
             <BattleRoom
@@ -271,6 +280,13 @@ export default function DashboardPage() {
           personaId={activePersonaId}
           onClose={() => setShowAddJob(false)}
           onCreated={handleJobCreated}
+        />
+      )}
+      {showDiscoverJobs && hasPersona && (
+        <DiscoverJobsModal
+          personaId={activePersonaId}
+          onClose={() => setShowDiscoverJobs(false)}
+          onImported={handleJobImported}
         />
       )}
       {showSettings && (

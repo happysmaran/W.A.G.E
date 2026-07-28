@@ -20,6 +20,7 @@ class JobStatus(str, Enum):
 
 class JobSource(str, Enum):
     pasted = "pasted"
+    discovered = "discovered"
 
 
 class GapSeverity(str, Enum):
@@ -115,3 +116,21 @@ class OutreachRequest(BaseModel):
     job_id: str
     contact_name: str | None = None
     channel: str = "email"  # "email" | "linkedin"
+
+
+class DiscoverRequest(BaseModel):
+    query: str
+    max_results: int = 10
+
+
+class DiscoverResult(BaseModel):
+    title: str
+    url: str
+    snippet: str = ""
+
+
+class DiscoverImportRequest(BaseModel):
+    persona_id: str
+    url: str
+    title_hint: str = ""
+    company_hint: str = ""

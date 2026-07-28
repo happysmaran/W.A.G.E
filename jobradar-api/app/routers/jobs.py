@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
@@ -9,6 +10,8 @@ from sqlmodel import Session, select
 from app.db import get_session
 from app.models.db_models import JobDB, PersonaDB
 from app.models.schemas import (
+    DiscoverImportRequest,
+    DiscoverResult,
     Job,
     JobCreate,
     JobStatus,
@@ -18,6 +21,7 @@ from app.models.schemas import (
     TailorRequest,
 )
 from app.services.ingest import parse_pasted_job
+from app.services.job_discovery import DiscoveryUnavailableError, job_discovery_client
 from app.services.scoring import score_job
 from app.services.tailoring import generate_outreach_draft, generate_tailored_bullet
 from app.services.vector_store import vector_index
@@ -45,6 +49,44 @@ def _to_schema(row: JobDB) -> Job:
     )
 
 
+async def _score_and_persist_job(
+    session: Session,
+    persona_id: str,
+    title: str,
+    company: str,
+    description: str,
+    source: str,
+    source_label: str,
+) -> JobDB:
+    result = await score_job(
+        persona_id=persona_id,
+        job_title=title,
+        company=company,
+        job_description=description,
+    )
+    row = JobDB(
+        id=str(uuid.uuid4())[:8],
+        persona_id=persona_id,
+        title=title,
+        company=company,
+        source=source,
+        source_label=source_label,
+        score=result["score"],
+        tag=result["tag"],
+        status="inbox",
+        matches=result["matches"],
+        gaps=result["gaps"],
+        bullet_before="",
+        bullet_after="",
+        outreach_draft="",
+        job_description=description,
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
 @router.post("", response_model=Job)
 async def create_job(payload: JobCreate, session: Session = Depends(get_session)):
     """Cleans a raw pasted job posting, scores it against the persona, and persists it."""
@@ -68,33 +110,72 @@ async def create_job(payload: JobCreate, session: Session = Depends(get_session)
             ),
         )
 
-    result = await score_job(
-        persona_id=payload.persona_id,
-        job_title=cleaned["title"],
-        company=cleaned["company"],
-        job_description=cleaned["description"],
-    )
-
-    row = JobDB(
-        id=str(uuid.uuid4())[:8],
+    row = await _score_and_persist_job(
+        session,
         persona_id=payload.persona_id,
         title=cleaned["title"],
         company=cleaned["company"],
+        description=cleaned["description"],
         source="pasted",
         source_label="Pasted",
-        score=result["score"],
-        tag=result["tag"],
-        status="inbox",
-        matches=result["matches"],
-        gaps=result["gaps"],
-        bullet_before="",
-        bullet_after="",
-        outreach_draft="",
-        job_description=cleaned["description"],
     )
-    session.add(row)
-    session.commit()
-    session.refresh(row)
+    return _to_schema(row)
+
+
+@router.get("/discover", response_model=list[DiscoverResult])
+async def discover_jobs(query: str, max_results: int = 10):
+    """Search for job postings via Ollama's hosted web_search. Returns
+    candidate results for the person to review — nothing gets imported
+    until they explicitly pick one via POST /jobs/discover/import."""
+    try:
+        results = await job_discovery_client.search(query=query, max_results=max_results)
+    except DiscoveryUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [DiscoverResult(**r) for r in results]
+
+
+@router.post("/discover/import", response_model=Job)
+async def import_discovered_job(payload: DiscoverImportRequest, session: Session = Depends(get_session)):
+    """Fetches a specific search result's page (Ollama's web_fetch does the
+    HTML-to-clean-text extraction server-side), then runs it through the
+    exact same parse-and-score pipeline as a manual paste."""
+    persona = session.get(PersonaDB, payload.persona_id)
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+
+    try:
+        page_content = await job_discovery_client.fetch(payload.url)
+    except DiscoveryUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if not page_content.strip():
+        raise HTTPException(status_code=422, detail="Fetched page had no readable content.")
+
+    cleaned = await parse_pasted_job(
+        raw_text=page_content,
+        title_hint=payload.title_hint,
+        company_hint=payload.company_hint,
+    )
+    if not cleaned["title"] or not cleaned["company"]:
+        raise HTTPException(
+            status_code=422,
+            detail="Couldn't extract a job title and company from that page — it may not be a job posting.",
+        )
+
+    domain = urlparse(payload.url).netloc.replace("www.", "")
+    row = await _score_and_persist_job(
+        session,
+        persona_id=payload.persona_id,
+        title=cleaned["title"],
+        company=cleaned["company"],
+        description=cleaned["description"],
+        source="discovered",
+        source_label=domain or "Discovered",
+    )
     return _to_schema(row)
 
 
