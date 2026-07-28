@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import httpx
+import trafilatura
 
 from app.services.runtime_config import runtime_config
 
@@ -69,6 +70,24 @@ _MOCK_PAGE_CONTENT = (
 
 class DiscoveryUnavailableError(RuntimeError):
     """Raised when discovery is used without an Ollama API key configured."""
+
+
+# Used only for the fallback direct fetch below, when Ollama's hosted
+# web_fetch fails. A real browser User-Agent (plus the headers that
+# typically accompany it) gets past sites that block on a missing/bot-like
+# UA — a fairly common reason a fetch 404s or 403s. It does NOT help with
+# pages that are genuinely client-rendered (React/Vue SPA shells with no
+# content in the initial HTML) — no UA spoofing substitutes for actually
+# executing JavaScript; that would require a headless browser, which is the
+# Playwright approach this project deliberately moved away from.
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
 def _is_likely_posting_url(url: str) -> bool:
@@ -162,33 +181,73 @@ class JobDiscoveryClient:
 
         return merged[:max_results]
 
+    async def _ollama_fetch(self, url: str) -> str:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{DISCOVERY_BASE_URL}/api/web_fetch",
+                headers=self._headers(),
+                json={"url": url},
+            )
+            response.raise_for_status()
+            return response.json().get("content", "")
+
+    async def _direct_fetch(self, url: str) -> str:
+        """Fallback for when Ollama's hosted fetch fails: a plain HTTP GET
+        with a real browser User-Agent, then trafilatura strips it down to
+        the main readable content the same way Ollama's fetch would have.
+        Only helps when the original failure was bot-blocking, not when the
+        page is a genuine client-rendered SPA shell (see module docstring
+        on _BROWSER_HEADERS).
+        """
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True, headers=_BROWSER_HEADERS) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            html = response.text
+
+        extracted = trafilatura.extract(html, include_comments=False, include_tables=False)
+        return extracted or ""
+
     async def fetch(self, url: str) -> str:
-        """Returns cleaned, readable page content (Ollama does the
-        readability extraction server-side — this is what makes this a
-        viable replacement for Playwright + manual HTML scraping)."""
+        """Returns cleaned, readable page content. Tries Ollama's hosted
+        web_fetch first (it does readability extraction server-side); if
+        that fails, falls back to a direct fetch with a browser User-Agent
+        plus local extraction via trafilatura. The fallback rescues cases
+        where a site specifically blocks Ollama's fetcher (bot detection on
+        UA/headers) but not a real browser; it can't rescue pages that are
+        genuinely empty without JavaScript execution.
+        """
         if runtime_config.state.mock_llm:
             return _MOCK_PAGE_CONTENT
         self._require_key()
 
+        ollama_error: Exception | None = None
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    f"{DISCOVERY_BASE_URL}/api/web_fetch",
-                    headers=self._headers(),
-                    json={"url": url},
-                )
-                response.raise_for_status()
-                data = response.json()
+            content = await self._ollama_fetch(url)
+            if content.strip():
+                return content
         except httpx.HTTPStatusError as exc:
-            raise RuntimeError(
-                f"Couldn't fetch that page (HTTP {exc.response.status_code}). Some job boards render "
-                f"listings client-side via JavaScript, which a plain fetch can't execute — try a "
-                f"different result, or open the link directly in a browser."
-            ) from exc
+            ollama_error = exc
         except httpx.ConnectError as exc:
             raise RuntimeError("Couldn't reach ollama.com for web fetch — check your internet connection.") from exc
 
-        return data.get("content", "")
+        try:
+            content = await self._direct_fetch(url)
+            if content.strip():
+                return content
+        except Exception:
+            pass  # fall through to the combined error below
+
+        status_note = (
+            f"HTTP {ollama_error.response.status_code} from Ollama's fetch"
+            if isinstance(ollama_error, httpx.HTTPStatusError)
+            else "no readable content"
+        )
+        raise RuntimeError(
+            f"Couldn't fetch that page ({status_note}), and a direct fetch with a browser "
+            f"user-agent didn't get readable content either — this listing is likely rendered "
+            f"entirely client-side via JavaScript, which neither approach can execute. Try a "
+            f"different result, or open the link directly in a browser."
+        )
 
 
 job_discovery_client = JobDiscoveryClient()
