@@ -143,12 +143,10 @@ async function createWindow() {
     await startUiServer(outDir);
   }
 
-  if (!app.isPackaged) {
-    try {
-      await waitForBackendReady(10000);
-    } catch (err) {
-      console.warn('Backend readiness check failed:', err?.message || err);
-    }
+  try {
+    await waitForBackendReady(20000);
+  } catch (err) {
+    console.warn('Backend readiness check failed:', err?.message || err);
   }
 
   mainWindow.loadURL(`http://127.0.0.1:${uiServerPort}/`);
