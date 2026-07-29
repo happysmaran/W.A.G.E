@@ -15,7 +15,11 @@ class Settings(BaseSettings):
     ollama_num_ctx: int = 4096
     mock_llm: bool = False
 
-    cors_origins: list[str] = ["http://localhost:3000", "null"]
+    # The packaged Electron app serves the UI from a locally-spawned
+    # http server on a random 127.0.0.1 port (see main.js), so we can't
+    # pin an exact origin the way we can for `next dev`. No cookies/
+    # credentials are used by lib/api.ts, so a wildcard is safe here.
+    cors_origins: list[str] = ["http://localhost:3000", "*"]
 
     class Config:
         env_prefix = "WAGE_"

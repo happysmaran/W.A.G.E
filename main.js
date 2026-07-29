@@ -1,9 +1,76 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const http = require('http');
+const fs = require('fs');
 const { spawn } = require('child_process');
 
 let mainWindow;
 let backendProcess;
+let uiServer;
+let uiServerPort = 0;
+
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2'
+};
+
+// Serves the statically-exported Next.js `out/` folder over a real
+// http://localhost origin instead of file://, so client-side routing,
+// relative asset resolution, and CORS all behave like a normal browser.
+function startUiServer(outDir) {
+  return new Promise((resolve) => {
+    const server = http.createServer((req, res) => {
+      let reqPath = decodeURIComponent(req.url.split('?')[0]);
+      let filePath = path.join(outDir, reqPath);
+
+      // Directory or no-extension request -> serve index.html (SPA fallback)
+      if (!path.extname(filePath)) {
+        const asHtml = `${filePath}.html`;
+        if (fs.existsSync(asHtml)) {
+          filePath = asHtml;
+        } else if (fs.existsSync(path.join(filePath, 'index.html'))) {
+          filePath = path.join(filePath, 'index.html');
+        } else {
+          filePath = path.join(outDir, 'index.html');
+        }
+      }
+
+      fs.readFile(filePath, (err, data) => {
+        if (err) {
+          // Fallback to index.html so client-side navigation to unknown
+          // paths (e.g. a hard refresh on /setup) doesn't 404.
+          fs.readFile(path.join(outDir, 'index.html'), (err2, indexData) => {
+            if (err2) {
+              res.writeHead(404);
+              res.end('Not found');
+              return;
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(indexData);
+          });
+          return;
+        }
+        const ext = path.extname(filePath);
+        res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+        res.end(data);
+      });
+    });
+
+    server.listen(0, '127.0.0.1', () => {
+      uiServer = server;
+      uiServerPort = server.address().port;
+      resolve(uiServerPort);
+    });
+  });
+}
 
 function startBackend() {
   const backendPath = app.isPackaged
@@ -11,17 +78,14 @@ function startBackend() {
     : path.join(__dirname, 'jobradar-api', 'dist', 'wage-backend', 'wage-backend');
 
   // Spawn the PyInstaller compiled executable
-  backendProcess = spawn(backendPath, [], {
-    detached: false, // ensures child dies if parent is killed
-    stdio: 'inherit'
-  });
+  backendProcess = spawn(backendPath, [], { cwd: path.dirname(backendPath), stdio: 'inherit' });
 
   backendProcess.on('error', (err) => {
     console.error('Failed to start backend process.', err);
   });
 }
 
-function createWindow() {
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -34,25 +98,20 @@ function createWindow() {
     }
   });
 
-  // Next.js static export loads from the local out/ directory
-  if (app.isPackaged) {
-    mainWindow.loadFile(path.join(process.resourcesPath, 'out', 'index.html'));
-  } else {
-    // In dev, we might just load the dev server, but for simplicity we load the built static site
-    mainWindow.loadFile(path.join(__dirname, 'out', 'index.html'));
+  const outDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'out')
+    : path.join(__dirname, 'out');
+
+  if (!uiServer) {
+    await startUiServer(outDir);
   }
 
-  // Handle SPA routing for local files (so refreshing doesn't 404)
-  mainWindow.webContents.on('did-fail-load', (e, code, desc, url) => {
-    if (url.startsWith('file://')) {
-      mainWindow.loadFile(path.join(app.isPackaged ? process.resourcesPath : __dirname, 'out', 'index.html'));
-    }
-  });
+  mainWindow.loadURL(`http://127.0.0.1:${uiServerPort}/`);
 }
 
 app.whenReady().then(() => {
   startBackend();
-  
+
   // Wait a moment for FastAPI to boot before showing the window
   setTimeout(createWindow, 1000);
 
@@ -70,5 +129,8 @@ app.on('window-all-closed', function () {
 app.on('will-quit', () => {
   if (backendProcess) {
     backendProcess.kill();
+  }
+  if (uiServer) {
+    uiServer.close();
   }
 });
