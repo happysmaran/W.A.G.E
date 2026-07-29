@@ -125,7 +125,7 @@ export const api = {
 
   getSetupStatus: () => request<{ needs_setup: boolean; has_api_key: boolean }>("/settings/status/setup"),
 
-  updateSettings: (payload: Partial<Omit<BackendSettings, "mode">>) =>
+  updateSettings: (payload: Partial<BackendSettings>) =>
     request<BackendSettings>("/settings", {
       method: "PUT",
       body: JSON.stringify(payload)

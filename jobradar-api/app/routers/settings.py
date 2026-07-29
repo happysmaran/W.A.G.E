@@ -21,6 +21,7 @@ async def get_setup_status(session: Session = Depends(get_session)):
 
 
 class SettingsUpdate(BaseModel):
+    mode: str | None = None
     base_url: str | None = None
     api_key: str | None = None
     model: str | None = None

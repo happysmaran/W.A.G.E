@@ -53,6 +53,7 @@ export default function SetupPage() {
     setError("");
     try {
       await api.updateSettings({
+        mode: "cloud",
         api_key: apiKey.trim(),
         base_url: "https://ollama.com",
       });
