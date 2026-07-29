@@ -6,9 +6,18 @@ from sqlmodel import Session
 
 from app.db import get_session
 from app.services.runtime_config import runtime_config
-from app.services.settings_persistence import save_runtime_config
+from app.services.settings_persistence import save_runtime_config, load_runtime_config
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+@router.get("/status/setup")
+async def get_setup_status(session: Session = Depends(get_session)):
+    """Checks if the user has completed the first-run wizard."""
+    saved = load_runtime_config(session)
+    needs_setup = saved is None
+    has_key = bool(saved and saved.get("api_key"))
+    return {"needs_setup": needs_setup, "has_api_key": has_key}
 
 
 class SettingsUpdate(BaseModel):

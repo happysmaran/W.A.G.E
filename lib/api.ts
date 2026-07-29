@@ -123,6 +123,8 @@ export const api = {
 
   getSettings: () => request<BackendSettings>("/settings"),
 
+  getSetupStatus: () => request<{ needs_setup: boolean; has_api_key: boolean }>("/settings/status/setup"),
+
   updateSettings: (payload: Partial<Omit<BackendSettings, "mode">>) =>
     request<BackendSettings>("/settings", {
       method: "PUT",
