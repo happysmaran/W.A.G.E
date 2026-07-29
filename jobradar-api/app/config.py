@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     ollama_num_ctx: int = 4096
     mock_llm: bool = False
 
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "null"]
 
     class Config:
         env_prefix = "WAGE_"
