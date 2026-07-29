@@ -219,6 +219,10 @@ class JobDiscoveryClient:
             html = response.text
 
         extracted = trafilatura.extract(html, include_comments=False, include_tables=False)
+        if not extracted or len(extracted.strip()) < 100:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+            extracted = soup.get_text(separator="\n", strip=True)
         return extracted or ""
 
     async def _render_fetch(self, url: str) -> str:
@@ -227,6 +231,10 @@ class JobDiscoveryClient:
         """
         html = await render_page_html(url)
         extracted = trafilatura.extract(html, include_comments=False, include_tables=False)
+        if not extracted or len(extracted.strip()) < 100:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+            extracted = soup.get_text(separator="\n", strip=True)
         return extracted or ""
 
     async def fetch(self, url: str) -> str:
@@ -241,6 +249,15 @@ class JobDiscoveryClient:
         if runtime_config.state.mock_llm:
             return _MOCK_PAGE_CONTENT
         self._require_key()
+
+        if "boards.greenhouse.io/embed/job_app" in url:
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            company = params.get("for", [""])[0]
+            token = params.get("token", [""])[0]
+            if company and token:
+                url = f"https://boards.greenhouse.io/{company}/jobs/{token}"
 
         ollama_error: Exception | None = None
         try:
