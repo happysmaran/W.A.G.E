@@ -73,15 +73,53 @@ function startUiServer(outDir) {
 }
 
 function startBackend() {
-  const backendPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'wage-backend', 'wage-backend')
-    : path.join(__dirname, 'jobradar-api', 'dist', 'wage-backend', 'wage-backend');
-
-  // Spawn the PyInstaller compiled executable
-  backendProcess = spawn(backendPath, [], { cwd: path.dirname(backendPath), stdio: 'inherit' });
+  if (app.isPackaged) {
+    const backendPath = path.join(process.resourcesPath, 'wage-backend', 'wage-backend');
+    backendProcess = spawn(backendPath, [], { cwd: path.dirname(backendPath), stdio: 'inherit' });
+  } else {
+    const pythonCommand = process.env.WAGE_PYTHON || 'python3';
+    backendProcess = spawn(
+      pythonCommand,
+      ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'],
+      { cwd: path.join(__dirname, 'jobradar-api'), stdio: 'inherit' }
+    );
+  }
 
   backendProcess.on('error', (err) => {
     console.error('Failed to start backend process.', err);
+  });
+}
+
+async function waitForBackendReady(timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      const req = http.request(
+        { hostname: '127.0.0.1', port: 8000, path: '/health', method: 'GET', timeout: 1000 },
+        (res) => {
+          if (res.statusCode === 200) {
+            resolve();
+          } else if (Date.now() < deadline) {
+            setTimeout(check, 250);
+          } else {
+            reject(new Error(`Backend did not become ready within ${timeoutMs}ms`));
+          }
+        }
+      );
+
+      req.on('error', () => {
+        if (Date.now() < deadline) {
+          setTimeout(check, 250);
+        } else {
+          reject(new Error(`Backend did not become ready within ${timeoutMs}ms`));
+        }
+      });
+
+      req.end();
+    };
+
+    check();
   });
 }
 
@@ -98,12 +136,19 @@ async function createWindow() {
     }
   });
 
-  const outDir = app.isPackaged
-    ? path.join(process.resourcesPath, 'out')
-    : path.join(__dirname, 'out');
+  const appPath = app.isPackaged ? app.getAppPath() : __dirname;
+  const outDir = path.join(appPath, 'out');
 
   if (!uiServer) {
     await startUiServer(outDir);
+  }
+
+  if (!app.isPackaged) {
+    try {
+      await waitForBackendReady(10000);
+    } catch (err) {
+      console.warn('Backend readiness check failed:', err?.message || err);
+    }
   }
 
   mainWindow.loadURL(`http://127.0.0.1:${uiServerPort}/`);
