@@ -72,17 +72,35 @@ function startUiServer(outDir) {
   });
 }
 
+function getBackendSpawnOptions(cwd) {
+  const hideConsole = process.env.WAGE_HIDE_BACKEND_CONSOLE !== 'false';
+
+  return {
+    cwd,
+    windowsHide: process.platform === 'win32' && hideConsole,
+    stdio: hideConsole ? ['ignore', 'pipe', 'pipe'] : 'inherit'
+  };
+}
+
 function startBackend() {
   if (app.isPackaged) {
     const backendPath = path.join(process.resourcesPath, 'wage-backend', 'wage-backend');
-    backendProcess = spawn(backendPath, [], { cwd: path.dirname(backendPath), stdio: 'inherit' });
+    backendProcess = spawn(backendPath, [], getBackendSpawnOptions(path.dirname(backendPath)));
   } else {
     const pythonCommand = process.env.WAGE_PYTHON || 'python3';
     backendProcess = spawn(
       pythonCommand,
       ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'],
-      { cwd: path.join(__dirname, 'jobradar-api'), stdio: 'inherit' }
+      getBackendSpawnOptions(path.join(__dirname, 'jobradar-api'))
     );
+  }
+
+  if (backendProcess.stdout) {
+    backendProcess.stdout.on('data', (chunk) => process.stdout.write(chunk));
+  }
+
+  if (backendProcess.stderr) {
+    backendProcess.stderr.on('data', (chunk) => process.stderr.write(chunk));
   }
 
   backendProcess.on('error', (err) => {

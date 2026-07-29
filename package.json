@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build:ui": "next build",
     "build:api": "cd jobradar-api && python3 build_backend.py",
-    "build:app": "electron-builder",
+    "build:app": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
     "build": "npm run build:ui && npm run build:api && npm run build:app",
     "start": "next start",
     "lint": "next lint",
@@ -18,6 +18,9 @@
     "productName": "WAGE",
     "directories": {
       "output": "dist"
+    },
+    "win": {
+      "signAndEditExecutable": false
     },
     "files": [
       "main.js",
@@ -47,6 +50,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
+    "cross-env": "^10.1.0",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "postcss": "^8.4.38",
