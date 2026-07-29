@@ -237,14 +237,51 @@ class JobDiscoveryClient:
             extracted = soup.get_text(separator="\n", strip=True)
         return extracted or ""
 
+    # Minimum content length to consider a fetch tier "successful". Anything
+    # shorter is likely a "Page not found", bot-block landing page, or a
+    # blank application-form shell — not a real job description.
+    _MIN_CONTENT_LEN = 300
+
+    # Phrases that indicate the page is dead / not the actual job listing.
+    # If any of these appear in the first 400 chars, we treat the tier as
+    # failed regardless of total length.
+    _DEAD_PAGE_SIGNALS = [
+        "page not found",
+        "job no longer",
+        "no longer active",
+        "position has been filled",
+        "posting has expired",
+        "this job is no longer",
+        "this position is no longer",
+        "404",
+        "access denied",
+        "just a moment",  # Cloudflare challenge
+        "enable javascript",
+        "please enable javascript",
+    ]
+
+    def _is_usable_content(self, content: str) -> bool:
+        """Returns True only if content is long enough and doesn't look like
+        a dead-page or bot-block response."""
+        stripped = content.strip()
+        if len(stripped) < self._MIN_CONTENT_LEN:
+            return False
+        preview = stripped[:400].lower()
+        return not any(signal in preview for signal in self._DEAD_PAGE_SIGNALS)
+
     async def fetch(self, url: str) -> str:
-        """Returns cleaned, readable page content. Tries Ollama's hosted
-        web_fetch first (it does readability extraction server-side); if
-        that fails, falls back to a direct fetch with a browser User-Agent
-        plus local extraction via trafilatura. The fallback rescues cases
-        where a site specifically blocks Ollama's fetcher (bot detection on
-        UA/headers) but not a real browser; it can't rescue pages that are
-        genuinely empty without JavaScript execution.
+        """Returns cleaned, readable page content.
+
+        Three-tier pipeline:
+          1. Ollama hosted web_fetch (server-side readability extraction)
+          2. Direct HTTP GET with a real browser User-Agent + trafilatura/BS4
+          3. Playwright headless Chromium render (full JS execution)
+
+        Each tier must return >300 chars of content that doesn't look like
+        a dead-page or bot-block before we accept it. Otherwise we fall
+        through to the next tier. This ensures SPAs and Greenhouse/Ashby
+        job boards — whose static HTML shell has almost no text — always
+        reach the Playwright tier rather than returning garbage early.
         """
         if runtime_config.state.mock_llm:
             return _MOCK_PAGE_CONTENT
@@ -260,28 +297,33 @@ class JobDiscoveryClient:
                 url = f"https://boards.greenhouse.io/{company}/jobs/{token}"
 
         ollama_error: Exception | None = None
+
+        # --- Tier 1: Ollama hosted web_fetch ---
         try:
             content = await self._ollama_fetch(url)
-            if content.strip():
+            if self._is_usable_content(content):
                 return content
+            # Content came back but was too short / dead page — fall through.
         except httpx.HTTPStatusError as exc:
             ollama_error = exc
         except httpx.ConnectError as exc:
             raise RuntimeError("Couldn't reach ollama.com for web fetch — check your internet connection.") from exc
 
+        # --- Tier 2: Direct HTTP GET with browser headers ---
         try:
             content = await self._direct_fetch(url)
-            if content.strip():
+            if self._is_usable_content(content):
                 return content
         except Exception:
-            pass  # fall through to the render fetch below
+            pass
 
+        # --- Tier 3: Playwright headless render (handles SPAs) ---
         try:
             content = await self._render_fetch(url)
-            if content.strip():
+            if self._is_usable_content(content):
                 return content
         except Exception:
-            pass  # fall through to the combined error below
+            pass
 
         status_note = (
             f"HTTP {ollama_error.response.status_code} from Ollama's fetch"
