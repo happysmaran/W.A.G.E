@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W.A.G.E — Work Aggregation and Guidance Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand mono"><span class="dot"></span>W.A.G.E</div>
+    <nav class="topnav">
+      <a class="navlink" href="#how">How it works</a>
+      <a class="topnav-cta" href="https://github.com/happysmaran/W.A.G.E" target="_blank" rel="noopener">View source →</a>
+      <a class="topnav-cta filled mono" href="#download">Download →</a>
+    </nav>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <section class="hero">
+    <div class="eyebrow mono"><span class="blink"></span>LOCAL-FIRST · RUNS ON YOUR OWN OLLAMA</div>
+    <h1 class="title">Work Aggregation<br>and <span class="accent">Guidance</span> Engine.</h1>
+    <p class="sub">Paste a job posting. Get a fit score you can actually argue with — concrete matches, concrete gaps — plus a tailored resume bullet and a first-draft outreach message. No account, no cloud database, no black box.</p>
+    <div class="cta-row">
+      <a class="btn-primary mono" href="#download">DOWNLOAD →</a>
+      <a class="btn-secondary" href="#how">See how scoring works</a>
+    </div>
+    <div class="hero-note">Install, point it at Ollama, open the app. No signup, no server but yours.</div>
+
+    <!-- LIVE DEMO -->
+    <div class="demo-shell">
+      <div class="demo-frame">
+        <div class="demo-titlebar">
+          <span>battle_room — Software Engineer, Intern · Stripe</span>
+          <div class="dots"><span></span><span></span><span></span></div>
+        </div>
+        <div class="demo-body">
+          <div class="demo-left">
+            <span class="field-label">Paste a job posting</span>
+            <textarea class="jobinput mono" id="jobtext" spellcheck="false">Looking for a backend engineer with strong Python and Docker experience. Familiarity with distributed systems, Go, and CI/CD pipelines a plus. You'll containerize services, own deploy pipelines, and work closely with our platform team.</textarea>
+            <button class="score-btn mono" id="scoreBtn">RUN FIT SCORE →</button>
+          </div>
+          <div class="demo-right">
+            <div class="score-row">
+              <span class="score-num mono" id="scoreNum">—</span>
+              <div class="score-bar-track"><div class="score-bar-fill" id="scoreFill"></div></div>
+            </div>
+            <div class="score-label">WHY THIS SCORE</div>
+            <ul class="why-list" id="whyList">
+              <li class="placeholder mono">Run the score to see matches and gaps →</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <section id="how">
+    <div class="section-head">
+      <div class="section-eyebrow mono">01 · The flow</div>
+      <h2 class="section-title">Five steps, in order — because job search actually happens in order.</h2>
+      <p class="section-sub">Each stage feeds the next. This is the one place a numbered sequence is honest, not decorative.</p>
+    </div>
+    <div class="pipeline">
+      <div class="pstep">
+        <div class="pnum mono">01</div>
+        <div><h3>Upload a persona</h3>
+          <p>Drop in a resume. It's extracted, chunked, and embedded locally — this becomes the baseline every job gets scored against.</p>
+          <div class="pmeta">pypdf → semantic chunking → nomic-embed-text</div>
+        </div>
+      </div>
+      <div class="pstep">
+        <div class="pnum mono">02</div>
+        <div><h3>Paste a job posting</h3>
+          <p>No scraping, no fragile headless browser. Paste the listing, and boilerplate — nav menus, cookie banners — gets stripped automatically.</p>
+          <div class="pmeta">paste-and-clean ingestion</div>
+        </div>
+      </div>
+      <div class="pstep">
+        <div class="pnum mono">03</div>
+        <div><h3>Read the score, not just the number</h3>
+          <p>The Battle Room breaks the fit score into explicit matches and gaps, grounded in cosine similarity between your resume and the posting.</p>
+          <div class="pmeta">vector similarity + LLM explainability</div>
+        </div>
+      </div>
+      <div class="pstep">
+        <div class="pnum mono">04</div>
+        <div><h3>Generate, then edit</h3>
+          <p>A tailored resume bullet and a first-draft outreach message, written from your actual resume content — both fully editable before you use them anywhere.</p>
+          <div class="pmeta">bullet tailoring · outreach drafting</div>
+        </div>
+      </div>
+      <div class="pstep">
+        <div class="pnum mono">05</div>
+        <div><h3>Track it through to a decision</h3>
+          <p>Inbox → Reviewing → Applied → Archived. Delete what you don't need. That's the whole lifecycle.</p>
+          <div class="pmeta">no CRM, no pipeline software</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding-top:0;">
+    <div class="status-strip mono">
+      <div class="status-cell on"><div class="n">2</div><div class="l">Tracked</div></div>
+      <div class="status-cell on"><div class="n">2</div><div class="l">Active</div></div>
+      <div class="status-cell"><div class="n">76</div><div class="l">Avg fit</div></div>
+      <div class="status-cell"><div class="n">$80k</div><div class="l">Salary floor</div></div>
+      <div class="status-cell"><div class="n">REMOTE</div><div class="l">Guardrail</div></div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="section-head">
+      <div class="section-eyebrow mono">02 · Get the app</div>
+      <h2 class="section-title">One installer. No terminal required.</h2>
+      <p class="section-sub">W.A.G.E ships as a packaged desktop app. Download, install, point it at Ollama, and you're in the Battle Room.</p>
+    </div>
+    <div class="download-grid">
+      <a class="download-card" href="https://github.com/happysmaran/W.A.G.E/releases/download/1.0/WAGE_macOS_arm64.dmg" target="_blank" rel="noopener">
+        <div class="dl-icon mono">⌘</div>
+        <div class="dl-text">
+          <div class="dl-os mono">macOS</div>
+          <div class="dl-sub">.dmg · Apple Silicon</div>
+        </div>
+        <div class="dl-arrow mono">↓</div>
+      </a>
+      <a class="download-card" href="https://github.com/happysmaran/W.A.G.E/releases/download/1.0/WAGE_Windows_x86-64.exe" target="_blank" rel="noopener">
+        <div class="dl-icon mono">▢</div>
+        <div class="dl-text">
+          <div class="dl-os mono">Windows</div>
+          <div class="dl-sub">.exe installer · Windows 10/11</div>
+        </div>
+        <div class="dl-arrow mono">↓</div>
+      </a>
+    </div>
+    <div class="download-note mono">Prefer to build it yourself? <a href="https://github.com/happysmaran/W.A.G.E" target="_blank" rel="noopener">Source on GitHub →</a></div>
+  </section>
+
+  <section>
+    <div class="cta-final">
+      <div>
+        <h2 class="mono">Install it. Run it. Own your job search.</h2>
+        <p>One download, an Ollama pull, and a resume. Everything stays on your machine.</p>
+      </div>
+      <a class="btn-primary mono" href="#download">DOWNLOAD →</a>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap footer-inner">
+    <span>W.A.G.E — formerly jobradar</span>
+    <a href="https://github.com/happysmaran/W.A.G.E" target="_blank" rel="noopener">github.com/happysmaran/W.A.G.E</a>
+  </div>
+</footer>
+
+<script>
+  const btn = document.getElementById('scoreBtn');
+  const num = document.getElementById('scoreNum');
+  const fill = document.getElementById('scoreFill');
+  const why = document.getElementById('whyList');
+  const input = document.getElementById('jobtext');
+
+  const skillBank = {
+    python: {label:"Python programming experience, including backend frameworks", w:14},
+    docker: {label:"Docker usage for containerization", w:12},
+    "ci/cd": {label:"CI/CD pipeline experience", w:10},
+    distributed: {label:"Exposure to distributed systems concepts", w:9},
+    git: {label:"Git proficiency and version control", w:8},
+    api: {label:"REST API design and integration", w:9},
+    react: {label:"Frontend development with React", w:8},
+    sql: {label:"Relational database experience (SQL)", w:8},
+  };
+  const gapBank = {
+    go: "No experience with Go programming language",
+    kubernetes: "No explicit Kubernetes / orchestration experience",
+    "distributed systems": "Limited large-scale distributed systems exposure",
+    finance: "No explicit finance or payments domain experience",
+  };
+
+  function runScore(){
+    const text = input.value.toLowerCase();
+    let score = 52;
+    const matches = [];
+    const gaps = [];
+
+    if(text.includes('python')){ score += skillBank.python.w; matches.push(skillBank.python.label); }
+    if(text.includes('docker')){ score += skillBank.docker.w; matches.push(skillBank.docker.label); }
+    if(text.includes('ci/cd') || text.includes('pipeline')){ score += skillBank["ci/cd"].w; matches.push(skillBank["ci/cd"].label); }
+    if(text.includes('git')){ score += skillBank.git.w; matches.push(skillBank.git.label); }
+    if(text.includes('api')){ score += skillBank.api.w; matches.push(skillBank.api.label); }
+    if(text.includes('react')){ score += skillBank.react.w; matches.push(skillBank.react.label); }
+    if(text.includes('sql')){ score += skillBank.sql.w; matches.push(skillBank.sql.label); }
+    if(text.includes('distributed')){ score += skillBank.distributed.w; matches.push(skillBank.distributed.label); gaps.push(gapBank["distributed systems"]); }
+
+    if(text.includes('go') && !text.includes('good')){ gaps.push(gapBank.go); }
+    if(text.includes('kubernetes') || text.includes('k8s')){ gaps.push(gapBank.kubernetes); }
+    if(text.includes('finance') || text.includes('payment')){ gaps.push(gapBank.finance); }
+
+    if(matches.length === 0){ matches.push("General full-stack overlap detected"); }
+    if(gaps.length === 0){ gaps.push("No major gaps flagged in this pass"); }
+
+    score = Math.min(97, score);
+
+    num.textContent = score;
+    fill.style.width = score + '%';
+
+    why.innerHTML = '';
+    matches.slice(0,4).forEach(m=>{
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="tag match mono">MATCH</span><span>'+m+'</span>';
+      why.appendChild(li);
+    });
+    gaps.slice(0,3).forEach(g=>{
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="tag gap mono">GAP</span><span>'+g+'</span>';
+      why.appendChild(li);
+    });
+  }
+
+  btn.addEventListener('click', runScore);
+  window.addEventListener('load', ()=> setTimeout(runScore, 400));
+</script>
+
+</body>
+</html>
