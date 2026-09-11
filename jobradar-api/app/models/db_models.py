@@ -42,6 +42,9 @@ class JobDB(SQLModel, table=True):
     outreach_draft: str
     applied_at: str | None = Field(default=None)
     job_description: str = Field(default="")
+    # Origin URL for jobs pulled from a feed / discovery, used to dedupe
+    # against re-ingesting the same posting. Empty for pasted jobs.
+    source_url: str = Field(default="", index=True)
 
 
 class SettingsDB(SQLModel, table=True):
@@ -49,3 +52,40 @@ class SettingsDB(SQLModel, table=True):
 
     key: str = Field(primary_key=True)
     value: str
+
+
+class JobFeedDB(SQLModel, table=True):
+    """A saved subscription to a company's ATS board. The background poller
+    walks every enabled feed on a timer and stages new postings as FeedItemDB
+    rows for the persona to review."""
+
+    __tablename__ = "job_feeds"
+
+    id: str = Field(primary_key=True)
+    persona_id: str = Field(index=True)
+    source: str  # "greenhouse" | "lever" | "ashby"
+    identifier: str  # company slug or board URL the user pasted
+    label: str = Field(default="")  # display name; defaults to source:identifier
+    keywords: str = Field(default="")  # comma-separated; matched case-insensitively against title
+    enabled: bool = Field(default=True)
+    created_at: str = Field(default="")
+    last_polled_at: str | None = Field(default=None)
+    last_status: str = Field(default="")  # "ok: N new" | "error: ..."
+
+
+class FeedItemDB(SQLModel, table=True):
+    """A posting found by a feed poll, staged for review. Nothing here is
+    scored or added to the jobs table until the user imports it."""
+
+    __tablename__ = "feed_items"
+
+    id: str = Field(primary_key=True)
+    feed_id: str = Field(index=True)
+    persona_id: str = Field(index=True)
+    title: str
+    company: str
+    url: str = Field(index=True)
+    description: str = Field(default="")
+    source_label: str = Field(default="")
+    first_seen_at: str = Field(default="")
+    status: str = Field(default="new")  # "new" | "imported" | "dismissed"

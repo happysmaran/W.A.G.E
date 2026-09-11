@@ -1,4 +1,16 @@
-import { BackendSettings, DiscoverResult, EmbeddingStatus, Job, JobStatus, OllamaStatus, Persona } from "./types";
+import {
+  BackendSettings,
+  DiscoverResult,
+  EmbeddingStatus,
+  FeedItem,
+  FeedPollStatus,
+  FeedSource,
+  Job,
+  JobFeed,
+  JobStatus,
+  OllamaStatus,
+  Persona
+} from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -110,6 +122,51 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ persona_id: personaId, job_id: jobId, contact_name: contactName, channel })
     }),
+
+  listFeeds: (personaId?: string) =>
+    request<JobFeed[]>(personaId ? `/feeds?persona_id=${encodeURIComponent(personaId)}` : "/feeds"),
+
+  createFeed: (payload: {
+    personaId: string;
+    source: FeedSource;
+    identifier: string;
+    label?: string;
+    keywords?: string;
+  }) =>
+    request<JobFeed>("/feeds", {
+      method: "POST",
+      body: JSON.stringify({
+        persona_id: payload.personaId,
+        source: payload.source,
+        identifier: payload.identifier,
+        label: payload.label ?? "",
+        keywords: payload.keywords ?? ""
+      })
+    }),
+
+  updateFeed: (feedId: string, payload: { enabled?: boolean; keywords?: string; label?: string }) =>
+    request<JobFeed>(`/feeds/${feedId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  deleteFeed: (feedId: string) => request<void>(`/feeds/${feedId}`, { method: "DELETE" }),
+
+  pollFeed: (feedId: string) => request<{ new_items: number }>(`/feeds/${feedId}/poll`, { method: "POST" }),
+
+  listFeedItems: (personaId?: string, status: string = "new") => {
+    const params = new URLSearchParams({ status });
+    if (personaId) params.set("persona_id", personaId);
+    return request<FeedItem[]>(`/feeds/items?${params.toString()}`);
+  },
+
+  importFeedItem: (itemId: string, personaId: string) =>
+    request<Job>(`/feeds/items/${itemId}/import`, {
+      method: "POST",
+      body: JSON.stringify({ persona_id: personaId })
+    }),
+
+  dismissFeedItem: (itemId: string) =>
+    request<void>(`/feeds/items/${itemId}/dismiss`, { method: "POST" }),
+
+  getFeedStatus: () => request<FeedPollStatus>("/feeds/status"),
 
   getOllamaStatus: () => request<OllamaStatus>("/ollama/status"),
 

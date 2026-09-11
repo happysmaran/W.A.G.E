@@ -134,3 +134,69 @@ class DiscoverImportRequest(BaseModel):
     url: str
     title_hint: str = ""
     company_hint: str = ""
+
+
+class FeedSource(str, Enum):
+    greenhouse = "greenhouse"
+    lever = "lever"
+    ashby = "ashby"
+
+
+class JobFeed(BaseModel):
+    id: str
+    persona_id: str = Field(alias="personaId")
+    source: FeedSource
+    identifier: str
+    label: str
+    keywords: str
+    enabled: bool
+    created_at: str | None = Field(alias="createdAt", default=None)
+    last_polled_at: str | None = Field(alias="lastPolledAt", default=None)
+    last_status: str = Field(alias="lastStatus", default="")
+
+    model_config = {"populate_by_name": True}
+
+
+class JobFeedCreate(BaseModel):
+    persona_id: str
+    source: FeedSource
+    identifier: str
+    label: str = ""
+    keywords: str = ""
+
+
+class JobFeedUpdate(BaseModel):
+    enabled: bool | None = None
+    keywords: str | None = None
+    label: str | None = None
+
+
+class FeedItem(BaseModel):
+    id: str
+    feed_id: str = Field(alias="feedId")
+    persona_id: str = Field(alias="personaId")
+    title: str
+    company: str
+    url: str
+    source_label: str = Field(alias="sourceLabel")
+    first_seen_at: str | None = Field(alias="firstSeenAt", default=None)
+    status: str
+
+    model_config = {"populate_by_name": True}
+
+
+class FeedItemImportRequest(BaseModel):
+    persona_id: str
+
+
+class FeedPollStatus(BaseModel):
+    enabled: bool
+    interval_seconds: int = Field(alias="intervalSeconds")
+    running: bool
+    last_run_at: str | None = Field(alias="lastRunAt", default=None)
+    last_error: str | None = Field(alias="lastError", default=None)
+    feeds_total: int = Field(alias="feedsTotal")
+    feeds_enabled: int = Field(alias="feedsEnabled")
+    items_new: int = Field(alias="itemsNew")
+
+    model_config = {"populate_by_name": True}

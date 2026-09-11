@@ -36,14 +36,17 @@ Embedding models and chat models are not interchangeable; chat models (`deepseek
 ## How to use
 
 1. **Upload a resume** (sidebar -> *+ Add persona*) - extracted, chunked, and embedded for similarity scoring.
-2. **Paste a job posting** (*+ Add job*) - cleaned up automatically (nav menus, cookie banners, etc. stripped) and scored against your resume.
+2. **Get jobs in**, any of three ways:
+   - **Paste a job posting** (*+ Add job*) - cleaned up automatically (nav menus, cookie banners, etc. stripped) and scored against your resume.
+   - **Discover jobs** - one-off web search via Ollama's hosted `web_search`; pick results to import.
+   - **Feeds** - subscribe to a company's Greenhouse / Lever / Ashby board. A background poller pulls new postings on a timer and stages them for review; you import the ones worth scoring. See the backend README.
 3. **Review the score breakdown** in the Battle Room - concrete matches and gaps, not just a number.
 4. **Generate** a tailored resume bullet and a first-draft outreach message - both editable before you use them anywhere.
 5. **Track status** (Inbox -> Reviewing -> Applied -> Archived) and delete what you don't need.
 
 ## Known Limitations
 
-- **No automated job-board scraping.** Tried and removed - Unfortunately, API results were inconsistent, JS-rendered career pages needed a full headless browser for fragile payoff, and scraping sits in a legal grey area regardless. Paste-and-clean is the one ingestion path.
+- **No blind job-board *scraping*.** HTML scraping of arbitrary career pages was tried and removed (fragile, legal grey area). What's supported instead is structured ingestion: paste-and-clean, one-off `web_search` discovery, and **Feeds** — polling the *public JSON board APIs* of Greenhouse / Lever / Ashby for companies you explicitly subscribe to. No HTML parsing, no headless browser, no ToS grey area. Postings are staged for review, never auto-applied.
 - **No auth/multi-user support.** Single-desk tool; mainly because every persona/job would be globally visible to whoever's running the backend. So no server is provided by me as a result.
 - **No production-grade vector DB.** In-memory cosine similarity stands in for Qdrant/ChromaDB, which is fine at personal scale.
 

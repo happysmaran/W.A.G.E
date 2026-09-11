@@ -14,6 +14,7 @@ from app.services.renderer import render_page_html
 # Tier 1: structured ATS APIs. No scraping fragility, no ToS risk.
 GREENHOUSE_BOARD_API = "https://boards-api.greenhouse.io/v1/boards/{company}/jobs"
 LEVER_BOARD_API = "https://api.lever.co/v0/postings/{company}"
+ASHBY_BOARD_API = "https://api.ashbyhq.com/posting-api/job-board/{company}"
 
 # LinkedIn/Indeed are deliberately excluded — aggressive anti-bot posture and
 # ToS terms make scraping them a liability rather than a data source.
@@ -105,6 +106,52 @@ async def fetch_lever_postings(identifier: str) -> list[dict]:
             }
             for job in postings
         ]
+
+
+async def fetch_ashby_postings(identifier: str) -> list[dict]:
+    company_slug = extract_board_slug(identifier)
+    if settings.mock_scraper:
+        return _mock_postings(company_slug, "ashby")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        # includeCompensation is harmless if unsupported and gets salary bands
+        # into the description text on boards that expose them.
+        response = await client.get(
+            ASHBY_BOARD_API.format(company=company_slug),
+            params={"includeCompensation": "true"},
+        )
+        if response.status_code == 404:
+            raise ValueError(
+                f"No Ashby board found for '{company_slug}'. The public posting API keys on the "
+                f"board name in jobs.ashbyhq.com/<name> — if that's not the company's Ashby slug, "
+                f"this endpoint won't have it. Try 'Company site' with a direct posting URL."
+            )
+        response.raise_for_status()
+        try:
+            data = response.json()
+        except ValueError:
+            raise ValueError(
+                f"Ashby returned a non-JSON response for '{company_slug}' — that slug likely has no "
+                f"active public board."
+            )
+        postings = data.get("jobs", [])
+        results = []
+        for job in postings:
+            description_plain = job.get("descriptionPlain") or ""
+            if not description_plain and job.get("descriptionHtml"):
+                description_plain = BeautifulSoup(job["descriptionHtml"], "html.parser").get_text(
+                    " ", strip=True
+                )
+            results.append(
+                {
+                    "title": job.get("title", ""),
+                    "company": job.get("organizationName") or company_slug,
+                    "source": "ashby",
+                    "url": job.get("jobUrl", ""),
+                    "description": clean_job_posting_text(description_plain),
+                }
+            )
+        return results
 
 
 def _extract_from_json_ld(soup: BeautifulSoup) -> dict | None:

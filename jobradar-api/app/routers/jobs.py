@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -22,69 +21,13 @@ from app.models.schemas import (
 )
 from app.services.ingest import parse_pasted_job
 from app.services.job_discovery import DiscoveryUnavailableError, job_discovery_client
+from app.services.job_pipeline import job_to_schema as _to_schema
+from app.services.job_pipeline import score_and_persist_job as _score_and_persist_job
 from app.services.scoring import score_job
 from app.services.tailoring import generate_outreach_draft, generate_tailored_bullet
 from app.services.vector_store import vector_index
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
-
-
-def _to_schema(row: JobDB) -> Job:
-    return Job(
-        id=row.id,
-        personaId=row.persona_id,
-        title=row.title,
-        company=row.company,
-        source=row.source,
-        sourceLabel=row.source_label,
-        score=row.score,
-        tag=row.tag,
-        status=row.status,
-        matches=row.matches,
-        gaps=row.gaps,
-        bulletBefore=row.bullet_before,
-        bulletAfter=row.bullet_after,
-        outreachDraft=row.outreach_draft,
-        appliedAt=row.applied_at,
-    )
-
-
-async def _score_and_persist_job(
-    session: Session,
-    persona_id: str,
-    title: str,
-    company: str,
-    description: str,
-    source: str,
-    source_label: str,
-) -> JobDB:
-    result = await score_job(
-        persona_id=persona_id,
-        job_title=title,
-        company=company,
-        job_description=description,
-    )
-    row = JobDB(
-        id=str(uuid.uuid4())[:8],
-        persona_id=persona_id,
-        title=title,
-        company=company,
-        source=source,
-        source_label=source_label,
-        score=result["score"],
-        tag=result["tag"],
-        status="inbox",
-        matches=result["matches"],
-        gaps=result["gaps"],
-        bullet_before="",
-        bullet_after="",
-        outreach_draft="",
-        job_description=description,
-    )
-    session.add(row)
-    session.commit()
-    session.refresh(row)
-    return row
 
 
 @router.post("", response_model=Job)
@@ -175,6 +118,7 @@ async def import_discovered_job(payload: DiscoverImportRequest, session: Session
         description=cleaned["description"],
         source="discovered",
         source_label=domain or "Discovered",
+        source_url=payload.url,
     )
     return _to_schema(row)
 

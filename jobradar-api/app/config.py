@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     ollama_num_ctx: int = 4096
     mock_llm: bool = False
 
+    # Job-feed poller (see services/job_feed.py). Feeds pull from public ATS
+    # board APIs (Greenhouse/Lever/Ashby) on a timer; new postings are staged
+    # for review, never auto-imported.
+    mock_scraper: bool = False
+    feed_poll_interval_seconds: int = 1800  # 30 min
+    feed_poll_enabled: bool = True
+
     # The packaged Electron app serves the UI from a locally-spawned
     # http server on a random 127.0.0.1 port (see main.js), so we can't
     # pin an exact origin the way we can for `next dev`. No cookies/

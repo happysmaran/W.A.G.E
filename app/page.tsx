@@ -7,6 +7,7 @@ import { BattleRoom } from "@/components/BattleRoom";
 import { UploadPersonaModal } from "@/components/UploadPersonaModal";
 import { AddJobModal } from "@/components/AddJobModal";
 import { DiscoverJobsModal } from "@/components/DiscoverJobsModal";
+import { FeedsModal } from "@/components/FeedsModal";
 import { TopBar } from "@/components/TopBar";
 import { SettingsModal } from "@/components/SettingsModal";
 import { api } from "@/lib/api";
@@ -33,6 +34,7 @@ export default function DashboardPage() {
   const [showUploadPersona, setShowUploadPersona] = useState(false);
   const [showAddJob, setShowAddJob] = useState(false);
   const [showDiscoverJobs, setShowDiscoverJobs] = useState(false);
+  const [showFeeds, setShowFeeds] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -174,6 +176,12 @@ export default function DashboardPage() {
     setSelectedJobId(job.id);
   }
 
+  // Feed imports can happen several at a time, so this leaves the modal open.
+  function handleFeedJobImported(job: Job) {
+    setJobs((prev) => [...prev, job]);
+    setSelectedJobId(job.id);
+  }
+
   function handleJobDeleted(jobId: string) {
     setJobs((prev) => prev.filter((j) => j.id !== jobId));
     setSelectedJobId(null);
@@ -244,6 +252,7 @@ export default function DashboardPage() {
             onSelectJob={setSelectedJobId}
             onAddJob={() => setShowAddJob(true)}
             onDiscoverJobs={() => setShowDiscoverJobs(true)}
+            onOpenFeeds={() => setShowFeeds(true)}
           />
           {selectedJob && (
             <BattleRoom
@@ -287,6 +296,13 @@ export default function DashboardPage() {
           personaId={activePersonaId}
           onClose={() => setShowDiscoverJobs(false)}
           onImported={handleJobImported}
+        />
+      )}
+      {showFeeds && hasPersona && (
+        <FeedsModal
+          personaId={activePersonaId}
+          onClose={() => setShowFeeds(false)}
+          onImported={handleFeedJobImported}
         />
       )}
       {showSettings && (

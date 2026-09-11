@@ -27,6 +27,44 @@ export interface Persona {
 
 export type WorkMode = "remote" | "hybrid" | "onsite";
 
+export type FeedSource = "greenhouse" | "lever" | "ashby";
+
+export interface JobFeed {
+  id: string;
+  personaId: string;
+  source: FeedSource;
+  identifier: string;
+  label: string;
+  keywords: string;
+  enabled: boolean;
+  createdAt?: string;
+  lastPolledAt?: string;
+  lastStatus: string;
+}
+
+export interface FeedItem {
+  id: string;
+  feedId: string;
+  personaId: string;
+  title: string;
+  company: string;
+  url: string;
+  sourceLabel: string;
+  firstSeenAt?: string;
+  status: "new" | "imported" | "dismissed";
+}
+
+export interface FeedPollStatus {
+  enabled: boolean;
+  intervalSeconds: number;
+  running: boolean;
+  lastRunAt?: string;
+  lastError?: string;
+  feedsTotal: number;
+  feedsEnabled: number;
+  itemsNew: number;
+}
+
 export type JobSource = "pasted" | "discovered";
 
 export interface BackendSettings {

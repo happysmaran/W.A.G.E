@@ -13,8 +13,9 @@ from app.config import settings
 from app.db import create_db_and_tables, engine
 from app.logging_config import logger, setup_logging
 from app.models.db_models import ResumeChunkDB
-from app.routers import embeddings, jobs, ollama, personas, settings as settings_router
+from app.routers import embeddings, feeds, jobs, ollama, personas, settings as settings_router
 from app.services.embedding_client import embedding_client
+from app.services.job_feed import feed_poller
 from app.services.runtime_config import runtime_config
 from app.services.settings_persistence import load_runtime_config
 from app.services.vector_store import vector_index
@@ -30,6 +31,10 @@ def _migrate_add_missing_columns() -> None:
             conn.exec_driver_sql("ALTER TABLE jobs ADD COLUMN persona_id TEXT DEFAULT ''")
             conn.commit()
             logger.info("migrated: added jobs.persona_id column")
+        if existing_columns and "source_url" not in existing_columns:
+            conn.exec_driver_sql("ALTER TABLE jobs ADD COLUMN source_url TEXT DEFAULT ''")
+            conn.commit()
+            logger.info("migrated: added jobs.source_url column")
 
 
 @asynccontextmanager
@@ -41,6 +46,10 @@ async def lifespan(app: FastAPI):
     # immediately at boot rather than waiting on the user's first resume
     # upload. /embeddings/status lets the frontend poll progress.
     asyncio.create_task(embedding_client.warm_up())
+
+    # Background job-feed poller: walks enabled ATS board feeds on a timer
+    # and stages new postings for review. Fire-and-forget, same as above.
+    feed_poller.start()
 
     with Session(engine) as session:
         saved_config = load_runtime_config(session)
@@ -96,6 +105,7 @@ app.include_router(jobs.router)
 app.include_router(ollama.router)
 app.include_router(settings_router.router)
 app.include_router(embeddings.router)
+app.include_router(feeds.router)
 
 
 @app.exception_handler(RuntimeError)
