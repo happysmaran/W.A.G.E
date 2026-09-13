@@ -1,0 +1,12 @@
+__pycache__
+**/__pycache__
+*.pyc
+.env
+WAGE.db
+data
+.git
+.venv
+venv
+test_*.py
+build_backend.py
+wage-backend.spec

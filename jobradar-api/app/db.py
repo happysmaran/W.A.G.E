@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
+
 from sqlmodel import Session, SQLModel, create_engine
 
-DATABASE_URL = "sqlite:///./WAGE.db"
+DB_PATH = os.environ.get("WAGE_DB_PATH", "./WAGE.db")
+DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 # check_same_thread=False is safe here because FastAPI's default dependency
 # injection opens/closes a fresh session per request rather than sharing one

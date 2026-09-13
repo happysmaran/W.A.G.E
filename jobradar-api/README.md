@@ -11,6 +11,20 @@ uvicorn app.main:app --reload --port 8000
 
 Visit `http://localhost:8000/docs` for interactive Swagger docs.
 
+### Docker
+(yes, Docker, cry about it)
+
+```bash
+cp .env.example .env   # optional, adjust as needed
+docker compose up --build
+```
+
+The API is then reachable at `http://localhost:8000`. SQLite data persists in
+the `wage-data` named volume (mounted at `/app/data`) across container
+recreation. If Ollama runs on your host machine (not in a container), the
+compose file points `WAGE_OLLAMA_BASE_URL` at `host.docker.internal` for you —
+override it in `.env` if Ollama lives elsewhere (e.g. Ollama Cloud).
+
 ## Configuration
 
 Two layers:
